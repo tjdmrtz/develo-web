@@ -105,7 +105,13 @@ else
         MinTTL: 0,
         AllowedMethods: {Quantity: 2, Items: ["GET","HEAD"],
                         CachedMethods: {Quantity: 2, Items: ["GET","HEAD"]}},
-        Compress: true
+        Compress: true,
+        ForwardedValues: {
+          QueryString: false,
+          Cookies: {Forward: "none"},
+          Headers: [],
+          "CloudFront-Default": false
+        }
       },
       CustomErrorResponses: {Quantity: 1, Items: [{
         ErrorCode: 403, ResponseCode: "200", ResponsePagePath: "/index.html"
