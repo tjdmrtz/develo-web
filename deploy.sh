@@ -35,7 +35,7 @@ if ! aws s3api head-bucket --bucket "$BUCKET_NAME" 2>/dev/null; then
     --public-access-block-configuration "BlockPublicAcls=false,IgnorePublicAcls=false,BlockPublicPolicy=false,RestrictPublicBuckets=false"
   # Public read via bucket policy (bucket stays write-protected).
   aws s3api put-bucket-policy --bucket "$BUCKET_NAME" --policy "$(jq -n \
-    --bucket "$BUCKET_NAME" '{
+    --arg bucket "$BUCKET_NAME" '{
       Version: "2012-10-17",
       Statement: [{
         Sid: "PublicRead",
