@@ -62,8 +62,20 @@ aws s3 sync . "s3://$BUCKET_NAME" \
   --cache-control "max-age=300"
 
 # --- 3. CloudFront distribution ---------------------------------------------
+# The distribution may already exist from a previous (fresh) workspace: first
+# check the local cache, then look up an existing distribution by alias.
+DISTRIBUTION_ID=""
 if [ -f "$DIST_ID_FILE" ]; then
   DISTRIBUTION_ID="$(cat "$DIST_ID_FILE")"
+fi
+if [ -z "$DISTRIBUTION_ID" ] && [ -n "$DOMAIN_NAMES" ]; then
+  FIRST_DOMAIN="${DOMAIN_NAMES%% *}"
+  DISTRIBUTION_ID="$(aws cloudfront list-distributions \
+    --query 'DistributionList.Items[].{Id:Id,Aliases:Aliases.Items}' --output json 2>/dev/null \
+    | jq -r --arg d "$FIRST_DOMAIN" '[.[] | select(.Aliases != null and (.Aliases | index($d)))] | .[0].Id // empty')"
+fi
+if [ -n "$DISTRIBUTION_ID" ]; then
+  echo "$DISTRIBUTION_ID" > "$DIST_ID_FILE"
   echo "CloudFront distribution exists: $DISTRIBUTION_ID"
 else
   echo "Creating CloudFront distribution..."
