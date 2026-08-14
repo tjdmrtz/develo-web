@@ -77,7 +77,7 @@ else
     fi
     read -r -a DOMAINS <<< "$DOMAIN_NAMES"
     ALIAS_JSON="$(printf '%s\n' "${DOMAINS[@]}" | jq -R . | jq -s '{Quantity: length, Items: .}')"
-    VIEWER_CERT_JSON="$(jq -n --arn "$CERTIFICATE_ARN" \
+    VIEWER_CERT_JSON="$(jq -n --arg arn "$CERTIFICATE_ARN" \
       '{ACMCertificateArn: $arn, SSLSupportMethod: "sni-only", MinimumProtocolVersion: "TLSv1.2_2021"}')"
   else
     VIEWER_CERT_JSON='{"CloudFrontDefaultCertificate": true}'
