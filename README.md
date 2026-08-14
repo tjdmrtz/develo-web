@@ -1,59 +1,65 @@
 # Develo Web
 
-Static frontend site designed to be served from an **S3 bucket** through **AWS CloudFront**.
+Static frontend site served from **S3** through **AWS CloudFront**, with automatic
+deploys from **GitHub Actions** on every push to `main` (direct pushes and PR
+merges alike).
 
-No build step required — just plain HTML, CSS and JS.
+- **URLs:** https://develo.software and https://www.develo.software
+- **No build step** — plain HTML, CSS and JS.
 
 ## Structure
 
 ```
 develo-web/
-├── index.html      # Main page
-├── css/style.css   # Styles
-├── js/main.js      # Client-side scripts
-└── deploy.sh       # Deploy script (S3 + CloudFront)
+├── index.html                  # Main page
+├── css/style.css               # Styles
+├── js/main.js                  # Client-side scripts
+├── deploy.sh                   # Deploy script (S3 sync + CloudFront)
+└── .github/workflows/deploy.yml  # CI/CD pipeline
 ```
 
 ## Local development
 
-Open `index.html` directly in a browser, or serve locally:
-
 ```bash
-python3 -m http.server 8080
-# → http://localhost:8080
+python3 -m http.server 8080   # → http://localhost:8080
 ```
 
-## Deployment to CloudFront
+## CI/CD
 
-### 1. Prerequisites
+Pushing to `main` runs `.github/workflows/deploy.yml`:
 
-- AWS CLI v2 installed and configured (`aws configure`) with permissions for `s3:*` and `cloudfront:*`
-- An S3 bucket (created by the script if it doesn't exist)
+1. Assumes `arn:aws:iam::346425562059:role/github-actions-develo-web` via **OIDC** (no static AWS keys in the repo).
+2. Runs `deploy.sh`:
+   - syncs the repo to `s3://develo-web-eu-west-1`
+   - creates the CloudFront distribution on first run (ID cached in `.cloudfront/distribution-id`)
+   - invalidates the CloudFront cache so changes propagate in minutes
 
-### 2. Deploy
+The IAM role trusts only this repo's `main` branch (OIDC `sub` claim).
+
+## Infrastructure (account 346425562059)
+
+| Resource | Value |
+|---|---|
+| Domain | `develo.software` (AWS Route 53 Registrar, renews 2027-08) |
+| S3 bucket | `develo-web-eu-west-1` (public-read bucket policy) |
+| CloudFront distribution | `E2RPSIN1IK02WM` → `d17anzlp75c4gj.cloudfront.net` |
+| ACM certificate | `arn:aws:acm:us-east-1:346425562059:certificate/8c743979-c36f-4609-8094-0979cae18fda` (DNS-validated, auto-renews) |
+| Route 53 zone | `Z0778491FJQXWBMMV7UC` — `develo.software` + `www` ALIAS → CloudFront |
+| IAM role (CI) | `github-actions-develo-web` (OIDC-federated, scoped to repo+branch) |
+
+## Manual deploy (fallback)
 
 ```bash
+REGION=eu-west-1 \
+BUCKET_NAME=develo-web-eu-west-1 \
+DOMAIN_NAMES="develo.software www.develo.software" \
+CERTIFICATE_ARN=arn:aws:acm:us-east-1:346425562059:certificate/8c743979-c36f-4609-8094-0979cae18fda \
 ./deploy.sh
 ```
 
-The script will:
-
-1. Create the S3 bucket `develo-web-<your-region>` (idempotent)
-2. Sync this directory to the bucket
-3. Create a CloudFront distribution pointing at the bucket (only on first run)
-4. Print the CloudFront URL when the distribution is deployed
-
-You can override the bucket name with `BUCKET_NAME=... ./deploy.sh`.
-
-### 3. Optional: custom domain
-
-To use a custom domain (e.g. `www.develo.com`):
-
-1. Create an ACM certificate in `us-east-1` for your domain (CloudFront requires us-east-1).
-2. Update `deploy.sh` — set `DOMAIN_NAMES` and `CERTIFICATE_ARN`.
-3. Add a CNAME record in Route 53 (or your DNS provider) pointing your domain at `<distribution-id>.cloudfront.net`.
-
 ## Notes
 
-- The bucket must be publicly readable for CloudFront to serve it to browsers. The deploy script applies a minimal public-read bucket policy.
-- CloudFront invalidations take ~15 min; the deploy script runs an invalidation after each sync so changes propagate sooner (~minutes).
+- `www.` is an alias handled by CloudFront (both names in the distribution);
+  DNS has separate ALIAS records for apex and `www`.
+- HTTP is redirected to HTTPS by the distribution.
+- 403s from S3 are masked as `index.html` (SPA-friendly) via CustomErrorResponses.
