@@ -109,8 +109,7 @@ else
         ForwardedValues: {
           QueryString: false,
           Cookies: {Forward: "none"},
-          Headers: [],
-          "CloudFront-Default": false
+          Headers: {Quantity: 0, Items: []}
         }
       },
       CustomErrorResponses: {Quantity: 1, Items: [{
