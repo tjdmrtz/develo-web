@@ -102,6 +102,7 @@ else
       DefaultCacheBehavior: {
         TargetOriginId: "s3-origin",
         ViewerProtocolPolicy: "redirect-to-https",
+        MinTTL: 0,
         AllowedMethods: {Quantity: 2, Items: ["GET","HEAD"],
                         CachedMethods: {Quantity: 2, Items: ["GET","HEAD"]}},
         Compress: true
