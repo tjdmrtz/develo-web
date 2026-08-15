@@ -1,0 +1,18 @@
+# Develo — crawler policy
+# All content is public and intended for search engines and AI assistants.
+
+User-agent: *
+Allow: /
+
+# AI search crawlers — deliberately allowed so Develo is
+# discoverable in ChatGPT Search, Claude and other LLM-powered search.
+User-agent: OAI-SearchBot
+Allow: /
+
+User-agent: GPTBot
+Allow: /
+
+User-agent: Claude-Web
+Allow: /
+
+Sitemap: https://develo.software/sitemap.xml
