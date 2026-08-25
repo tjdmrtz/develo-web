@@ -64,7 +64,7 @@ PAGES = [
                 {"title": "Maintenance",
                  "body": "Long-term support to ensure sustainable results and an up-to-date product."},
             ]},
-            {"t": "h2", "text": "Featured product: d-ialog by Develo"},
+            {"t": "h2", "text": "Featured product: d-ialog"},
             {"t": "p", "html": (
                 "<strong>d-ialog</strong> is our intelligent conversational "
                 "management platform: AI-powered conversations, automations and "
@@ -234,7 +234,7 @@ PAGES = [
             {"t": "h2", "text": "What we build"},
             {"t": "list", "items": [
                 "Internal platforms and back offices for operations, support and finance teams",
-                "SaaS and multi-tenant products, from MVP to scale",
+                "Multitenant SaaS and highly scalable products, from MVP to enterprise rollout",
                 "Customer-facing web and mobile experiences",
                 "Dashboards, reporting and data pipelines",
                 "Automation of manual workflows and integrations between systems",
@@ -799,6 +799,7 @@ PAGES = [
              "a": "Conversations and business data are processed under your tenancy in the cloud, with scoped integrations and audit logs. d-ialog learns from your interactions to improve, without exposing your data to third parties."},
         ],
         "sections": [
+            {"t": "product_showcase"},
             {"t": "h2", "text": "Why businesses choose d-ialog"},
             {"t": "grid", "cols": 2, "items": [
                 {"title": "Faster, smarter support",
@@ -847,6 +848,7 @@ PAGES = [
             {"t": "links", "items": [
                 {"label": "AI for WhatsApp", "href": "/solutions/ai-for-whatsapp/", "note": "WhatsApp customer service with AI agents"},
                 {"label": "AI for Mercado Libre", "href": "/solutions/ai-for-mercado-libre/", "note": "Marketplace question automation"},
+                {"label": "Intervan Enterprise Copilot", "href": "/case-studies/intervan/", "note": "Copilot and operational backoffice at enterprise scale"},
                 {"label": "Case Study: Tecnoland & Distriland", "href": "/case-studies/tecnoland-distriland/", "note": "A real implementation"},
             ]},
             {"t": "cta",
@@ -1131,13 +1133,21 @@ PAGES = [
         "schema": [],
         "sections": [
             {"t": "grid", "cols": 2, "items": [
+                {"title": "Intervan — Enterprise Copilot & Backoffice",
+                 "body": "A multitenant copilot and operational backoffice with dynamic knowledge, configurable metrics and governed actions through MCP.",
+                 "href": "/case-studies/intervan/",
+                 "image": "/assets/case-studies/intervan-cover.jpeg",
+                 "image_alt": "Intervan",
+                 "image_width": 2050,
+                 "image_height": 780},
                 {"title": "Tecnoland & Distriland — Digital Customer Experience",
                  "body": "Reinventing customer experience for a tech services company and a tech ecommerce brand: web experience, digital service channels and AI-powered conversations.",
-                 "href": "/case-studies/tecnoland-distriland/"},
+                 "href": "/case-studies/tecnoland-distriland/",
+                 "image": "/assets/case-studies/distriland.png",
+                 "image_alt": "Distriland",
+                 "image_width": 550,
+                 "image_height": 183},
             ]},
-            {"t": "callout",
-             "title": "More case studies in progress",
-             "body": "We publish a new detailed case study as projects mature. <a href='/contact/'>Contact us</a> for a confidential walk-through of relevant implementations."},
             {"t": "cta",
              "title": "Could your project be the next one?",
              "body": "Book a meeting and we'll show you how comparable projects were scoped and delivered."},
@@ -1166,6 +1176,9 @@ PAGES = [
                    ("Tecnoland & Distriland", "https://develo.software/case-studies/tecnoland-distriland/")],
         "schema": ["article"],
         "sections": [
+            {"t": "brand", "src": "/assets/case-studies/distriland.png",
+             "alt": "Distriland", "width": 550, "height": 183,
+             "caption": "Technology ecommerce and services"},
             {"t": "h2", "text": "Client"},
             {"t": "p", "html": (
                 "Tecnoland and Distriland, Buenos Aires. Tecnoland is a "
@@ -1219,6 +1232,75 @@ PAGES = [
             {"t": "cta",
              "title": "Want a project like this one?",
              "body": "Book a meeting and we'll map the scope, architecture and timeline for your business."},
+        ],
+    },
+
+    # --------------------------------------------------------- CASE STUDY INTERVAN
+    {
+        "path": "/case-studies/intervan/",
+        "lang": "en",
+        "title": "Intervan Enterprise AI Copilot & Backoffice Case Study | Develo",
+        "description": (
+            "How Develo engineered Intervan's multitenant AI copilot and backoffice "
+            "with dynamic knowledge, metrics, human supervision and MCP actions."
+        ),
+        "h1": "Intervan: An Enterprise Copilot Built to Operate and Scale",
+        "intro": (
+            "Intervan needed more than an AI assistant that answered questions. "
+            "It needed an operational product its own team could monitor, configure "
+            "and evolve — safely, across organizations and channels."
+        ),
+        "crumbs": [("Case Studies", "https://develo.software/case-studies/"),
+                   ("Intervan", "https://develo.software/case-studies/intervan/")],
+        "schema": ["article"],
+        "sections": [
+            {"t": "brand", "src": "/assets/case-studies/intervan-cover.jpeg",
+             "alt": "Intervan", "width": 2050, "height": 780,
+             "caption": "Enterprise software and public-sector operations"},
+            {"t": "h2", "text": "Need"},
+            {"t": "p", "html": (
+                "The copilot already answered questions, routed tickets and used "
+                "knowledge from multiple business modules. Intervan still depended "
+                "on Develo for every knowledge update and lacked the operational "
+                "visibility, controls and channels required for production."
+            )},
+            {"t": "h2", "text": "Solution"},
+            {"t": "grid", "cols": 2, "items": [
+                {"title": "Copilot for 1,000+ users",
+                 "body": "A multitenant architecture designed to serve more than 1,000 users while isolating each organization's context, rules and documentation."},
+                {"title": "Operational backoffice",
+                 "body": "One workspace for conversations, human intervention, configurable metrics, reports, users, roles and business rules."},
+                {"title": "Dynamic knowledge base",
+                 "body": "Intervan can load and edit documents, ingest transcribed video, reindex automatically and evolve RAG knowledge without developer intervention."},
+                {"title": "Actions through MCP",
+                 "body": "A governed action catalog connects the copilot to Intervan's system. Explicit confirmation, inherited permissions and full traceability protect every execution."},
+            ]},
+            {"t": "h2", "text": "Architecture"},
+            {"t": "list", "items": [
+                "AWS infrastructure for the copilot and backoffice, designed for resilient horizontal scale",
+                "Multitenant context, rules and knowledge with an initial path for Municipalidad de Neuquén",
+                "Panel for conversations, metrics, configuration, automated reports and exports",
+                "MCP tools over Intervan system APIs for scoped queries, updates and reports",
+                "Human supervision, real-time notifications, escalation and optional osTicket integration",
+                "WhatsApp Business through Meta APIs, using the same governed RAG layer",
+            ]},
+            {"t": "h2", "text": "Operational outcome"},
+            {"t": "p", "html": (
+                "The result is a functional, scalable operating model: Intervan can "
+                "manage knowledge, inspect service quality and control the copilot "
+                "from its own backoffice. The product can extend from answering to "
+                "executing approved workflows, with permissions and audit evidence "
+                "attached to every action."
+            )},
+            {"t": "h2", "text": "Related"},
+            {"t": "links", "items": [
+                {"label": "d-ialog", "href": "/solutions/d-ialog/", "note": "The conversational AI product behind the implementation"},
+                {"label": "AI Agents", "href": "/solutions/ai-agents/", "note": "Governed agents connected to business systems"},
+                {"label": "Technology Stack", "href": "/technologies/", "note": "AWS, Bedrock, MCP, RAG and observability"},
+            ]},
+            {"t": "cta",
+             "title": "Build an AI product your team can operate",
+             "body": "Book a meeting to map users, channels, knowledge and governed actions for your rollout."},
         ],
     },
 
@@ -1453,6 +1535,8 @@ PAGES = [
                 {"title": "Location",
                  "body": "Buenos Aires, Argentina (working across LATAM and remotely worldwide)"},
             ]},
+            {"t": "h2", "text": "Tell us about your project"},
+            {"t": "form"},
             {"t": "h2", "text": "What happens after you write"},
             {"t": "list", "items": [
                 "A short discovery call (30 min) to understand your problem and constraints",
@@ -1695,7 +1779,7 @@ PAGES = [
                 {"title": "Mantenimiento",
                  "body": "Soporte a largo plazo para garantizar resultados sostenibles y un producto actualizado."},
             ]},
-            {"t": "h2", "text": "Producto destacado: d-ialog by Develo"},
+            {"t": "h2", "text": "Producto destacado: d-ialog"},
             {"t": "p", "html": (
                 "<strong>d-ialog</strong> es nuestra plataforma de gestión "
                 "conversacional inteligente: conversaciones, automatizaciones y "
@@ -1774,3 +1858,10 @@ PAGES = [
         ],
     },
 ]
+
+
+# Every public English route has a hand-authored Spanish counterpart, and the
+# legacy Spanish legal page is normalized under /es/.
+from .localization import localize_pages
+
+PAGES = localize_pages(PAGES)

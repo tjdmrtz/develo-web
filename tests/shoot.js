@@ -1,4 +1,4 @@
-// Deterministic screenshots: usage: node shoot.js <url> <width> <height> <out.png>
+// Deterministic screenshots: usage: node shoot.js <url> <width> <height> <out.png> [open-menu]
 // Uses the system Chrome via puppeteer-core with an explicit 1:1 viewport,
 // so the captured viewport matches the requested CSS pixel size exactly.
 "use strict";
@@ -18,7 +18,7 @@ function findChrome() {
 }
 
 (async () => {
-  const [url, w, h, out] = process.argv.slice(2);
+  const [url, w, h, out, action] = process.argv.slice(2);
   if (!url || !out) {
     console.error("usage: node shoot.js <url> <width> <height> <out.png>");
     process.exit(2);
@@ -36,6 +36,15 @@ function findChrome() {
     const page = await browser.newPage();
     await page.setViewport({ width: Number(w || 1440), height: Number(h || 900), deviceScaleFactor: 1 });
     await page.goto(url, { waitUntil: "networkidle0", timeout: 60000 });
+    if (action === "open-menu") {
+      await page.click("[data-nav-toggle]");
+      await page.waitForSelector("[data-nav-menu].open", { visible: true });
+      await new Promise((resolve) => setTimeout(resolve, 350));
+    } else if (action === "hover-dialog") {
+      await page.$eval(".product-shot-secondary", (el) => el.scrollIntoView({ block: "center" }));
+      await page.hover(".product-shot-secondary");
+      await new Promise((resolve) => setTimeout(resolve, 800));
+    }
     await page.screenshot({ path: out });
   } finally {
     await browser.close();

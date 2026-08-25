@@ -22,6 +22,8 @@ DOMAIN_NAMES="${DOMAIN_NAMES:-}"
 CERTIFICATE_ARN="${CERTIFICATE_ARN:-}"
 CONFIG_DIR=".cloudfront"
 DIST_ID_FILE="${CONFIG_DIR}/distribution-id"
+FUNCTION_NAME="develo-clean-urls"
+FUNCTION_CODE_FILE="cloudfront-clean-urls.js"
 
 mkdir -p "$CONFIG_DIR"
 
@@ -66,7 +68,35 @@ aws s3 sync "$WEBSITE_DIR" "s3://$BUCKET_NAME" \
   --exclude ".DS_Store" \
   --cache-control "max-age=300"
 
-# --- 3. CloudFront distribution ---------------------------------------------
+# --- 3. Clean URLs at the CloudFront edge -----------------------------------
+if [ ! -f "$FUNCTION_CODE_FILE" ]; then
+  echo "ERROR: CloudFront function '$FUNCTION_CODE_FILE' not found" >&2
+  exit 1
+fi
+
+if aws cloudfront describe-function --name "$FUNCTION_NAME" --stage DEVELOPMENT >/dev/null 2>&1; then
+  FUNCTION_ETAG="$(aws cloudfront describe-function --name "$FUNCTION_NAME" \
+    --stage DEVELOPMENT --query 'ETag' --output text)"
+  aws cloudfront update-function \
+    --name "$FUNCTION_NAME" \
+    --if-match "$FUNCTION_ETAG" \
+    --function-config 'Comment=Rewrite clean URLs to directory index files,Runtime=cloudfront-js-2.0' \
+    --function-code "fileb://${FUNCTION_CODE_FILE}" >/dev/null
+else
+  aws cloudfront create-function \
+    --name "$FUNCTION_NAME" \
+    --function-config 'Comment=Rewrite clean URLs to directory index files,Runtime=cloudfront-js-2.0' \
+    --function-code "fileb://${FUNCTION_CODE_FILE}" >/dev/null
+fi
+
+FUNCTION_ETAG="$(aws cloudfront describe-function --name "$FUNCTION_NAME" \
+  --stage DEVELOPMENT --query 'ETag' --output text)"
+aws cloudfront publish-function --name "$FUNCTION_NAME" \
+  --if-match "$FUNCTION_ETAG" >/dev/null
+FUNCTION_ARN="$(aws cloudfront describe-function --name "$FUNCTION_NAME" \
+  --stage LIVE --query 'FunctionSummary.FunctionMetadata.FunctionARN' --output text)"
+
+# --- 4. CloudFront distribution ---------------------------------------------
 # The distribution may already exist from a previous (fresh) workspace: first
 # check the local cache, then look up an existing distribution by alias.
 DISTRIBUTION_ID=""
@@ -82,6 +112,33 @@ fi
 if [ -n "$DISTRIBUTION_ID" ]; then
   echo "$DISTRIBUTION_ID" > "$DIST_ID_FILE"
   echo "CloudFront distribution exists: $DISTRIBUTION_ID"
+
+  DIST_RESPONSE="$(aws cloudfront get-distribution-config --id "$DISTRIBUTION_ID")"
+  NEEDS_EDGE_CONFIG="$(echo "$DIST_RESPONSE" | jq -r --arg arn "$FUNCTION_ARN" '
+    (([.DistributionConfig.DefaultCacheBehavior.FunctionAssociations.Items[]?
+       | select(.EventType == "viewer-request" and .FunctionARN == $arn)] | length) != 1)
+    or
+    (([.DistributionConfig.CustomErrorResponses.Items[]?
+       | select(.ErrorCode == 403 and .ResponseCode == "404")] | length) != 1)')"
+
+  if [ "$NEEDS_EDGE_CONFIG" = "true" ]; then
+    DIST_ETAG="$(echo "$DIST_RESPONSE" | jq -r '.ETag')"
+    DIST_CONFIG="$(echo "$DIST_RESPONSE" | jq --arg arn "$FUNCTION_ARN" '
+      .DistributionConfig
+      | (.DefaultCacheBehavior.FunctionAssociations.Items // []) as $items
+      | .DefaultCacheBehavior.FunctionAssociations = {
+          Quantity: (($items | map(select(.EventType != "viewer-request")) | length) + 1),
+          Items: (($items | map(select(.EventType != "viewer-request"))) +
+                  [{EventType: "viewer-request", FunctionARN: $arn}])
+        }
+      | .CustomErrorResponses = {Quantity: 2, Items: [
+          {ErrorCode: 403, ResponseCode: "404", ResponsePagePath: "/404.html", ErrorCachingMinTTL: 300},
+          {ErrorCode: 404, ResponseCode: "404", ResponsePagePath: "/404.html", ErrorCachingMinTTL: 300}
+        ]}')"
+    aws cloudfront update-distribution --id "$DISTRIBUTION_ID" \
+      --if-match "$DIST_ETAG" --distribution-config "$DIST_CONFIG" >/dev/null
+    echo "Attached clean-URL function and real 404 responses"
+  fi
 else
   echo "Creating CloudFront distribution..."
 
@@ -106,6 +163,7 @@ else
     --arg caller "$(date +%s)develo-web" \
     --argjson aliases "$ALIAS_JSON" \
     --argjson cert "$VIEWER_CERT_JSON" \
+    --arg function_arn "$FUNCTION_ARN" \
     '{
       Enabled: true,
       Comment: $comment,
@@ -123,15 +181,19 @@ else
         AllowedMethods: {Quantity: 2, Items: ["GET","HEAD"],
                         CachedMethods: {Quantity: 2, Items: ["GET","HEAD"]}},
         Compress: true,
+        FunctionAssociations: {Quantity: 1, Items: [{
+          EventType: "viewer-request", FunctionARN: $function_arn
+        }]},
         ForwardedValues: {
           QueryString: false,
           Cookies: {Forward: "none"},
           Headers: {Quantity: 0, Items: []}
         }
       },
-      CustomErrorResponses: {Quantity: 1, Items: [{
-        ErrorCode: 403, ResponseCode: "200", ResponsePagePath: "/index.html"
-      }]},
+      CustomErrorResponses: {Quantity: 2, Items: [
+        {ErrorCode: 403, ResponseCode: "404", ResponsePagePath: "/404.html", ErrorCachingMinTTL: 300},
+        {ErrorCode: 404, ResponseCode: "404", ResponsePagePath: "/404.html", ErrorCachingMinTTL: 300}
+      ]},
       DefaultRootObject: "index.html",
       PriceClass: "PriceClass_100",
       ViewerCertificate: $cert
@@ -143,13 +205,13 @@ else
   echo "Distribution created: $DISTRIBUTION_ID"
 fi
 
-# --- 4. Invalidate cache ------------------------------------------------------
+# --- 5. Invalidate cache ------------------------------------------------------
 echo "Invalidating CloudFront cache..."
 aws cloudfront create-invalidation \
   --distribution-id "$DISTRIBUTION_ID" \
   --paths "/*" >/dev/null
 
-# --- 5. Show URL --------------------------------------------------------------
+# --- 6. Show URL --------------------------------------------------------------
 if [ -n "$DOMAIN_NAMES" ]; then
   FIRST_DOMAIN="${DOMAIN_NAMES%% *}"
   echo ""

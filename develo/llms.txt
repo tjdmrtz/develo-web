@@ -35,6 +35,7 @@
 
 - Ecommerce & retail: https://develo.software/industries/ecommerce-retail/
 - Case studies: https://develo.software/case-studies/
+- Intervan enterprise copilot and backoffice case study: https://develo.software/case-studies/intervan/
 - Tecnoland & Distriland case study: https://develo.software/case-studies/tecnoland-distriland/
 - Insights: https://develo.software/insights/
 - AI agents vs traditional chatbots: https://develo.software/insights/ai-agents-vs-chatbots/

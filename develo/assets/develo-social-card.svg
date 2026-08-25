@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 630">
+  <rect width="1200" height="630" fill="#fff"/>
+  <g stroke="#111" stroke-width="2" opacity=".42" fill="none">
+    <rect x="55" y="55" width="1090" height="410"/><rect x="340" y="165" width="520" height="210"/>
+    <path d="M55 55 340 165M1145 55 860 165M55 465 340 375M1145 465 860 375M220 55 410 165M410 55 480 165M600 55V165M790 55 720 165M980 55 790 165M220 465 410 375M410 465 480 375M600 465V375M790 465 720 375M980 465 790 375"/>
+  </g>
+  <g fill="#1D2CF3"><rect x="248" y="250" width="74" height="24"/><rect x="474" y="205" width="102" height="30"/><rect x="728" y="286" width="118" height="28"/></g>
+  <g fill="#D8400E"><rect x="830" y="185" width="82" height="32"/><rect x="358" y="350" width="72" height="16"/></g>
+  <text x="55" y="560" font-family="monospace" font-size="64" font-weight="700" fill="#1D2CF3">&lt;develo&gt;</text>
+  <text x="570" y="548" font-family="monospace" font-size="25" fill="#111">CUSTOM SOFTWARE // AI AGENTS // AUTOMATION</text>
+</svg>

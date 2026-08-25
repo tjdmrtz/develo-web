@@ -7,7 +7,7 @@ relationships are what search engines and LLM retrieval systems consume.
 
 BASE = "https://develo.software"
 
-LOGO = "https://static.wixstatic.com/media/20d02b_1c75f7f8b38e41409abbedd47ec40d7b%7Emv2.png/v1/fill/w_192%2Ch_192%2Clg_1%2Cusm_0.66_1.00_0.01/20d02b_1c75f7f8b38e41409abbedd47ec40d7b%7Emv2.png"
+LOGO = BASE + "/assets/develo-mark.png"
 EMAIL = "info@develo.ar"
 PHONE = "+54 11 3209-0851"
 PUBLISH_DATE = "2026-08-14"
@@ -17,7 +17,8 @@ def _org_ref():
     return {"@type": "Organization", "name": "Develo", "url": BASE + "/"}
 
 
-def organization():
+def organization(lang="en"):
+    spanish = lang == "es"
     return {
         "@context": "https://schema.org",
         "@type": "Organization",
@@ -27,6 +28,9 @@ def organization():
         "url": BASE + "/",
         "logo": LOGO,
         "description": (
+            "Develo desarrolla software a medida, agentes de inteligencia artificial y "
+            "automatización para atención al cliente, WhatsApp, marketplaces y operaciones digitales."
+            if spanish else
             "Develo builds custom software, artificial intelligence agents and "
             "automation solutions for customer service, WhatsApp, marketplaces "
             "and digital business operations."
@@ -43,18 +47,16 @@ def organization():
             "addressCountry": "AR",
         },
         "areaServed": ["AR", "US", "ES", "MX", "BR", "CL", "CO"],
-        "knowsAbout": [
-            "custom software development",
-            "artificial intelligence",
-            "AI agents",
-            "customer service automation",
-            "WhatsApp automation",
-            "Mercado Libre automation",
-            "API integrations",
-            "Amazon Web Services",
-            "Amazon Bedrock",
-            "LLM fine-tuning",
-        ],
+        "knowsAbout": ([
+            "desarrollo de software a medida", "inteligencia artificial", "agentes de IA",
+            "automatización de atención al cliente", "automatización de WhatsApp",
+            "automatización de Mercado Libre", "integraciones API", "Amazon Web Services",
+            "Amazon Bedrock", "fine-tuning de LLMs",
+        ] if spanish else [
+            "custom software development", "artificial intelligence", "AI agents",
+            "customer service automation", "WhatsApp automation", "Mercado Libre automation",
+            "API integrations", "Amazon Web Services", "Amazon Bedrock", "LLM fine-tuning",
+        ]),
         "sameAs": [
             "https://www.linkedin.com/company/wearedevelo",
             "https://www.instagram.com/develo.arg",
@@ -89,9 +91,13 @@ def website():
     }
 
 
-def breadcrumb(crumbs):
+def breadcrumb(crumbs, lang="en"):
     """crumbs: list of (name, url) tuples after 'Home'; last one is the page itself."""
-    items = [{"position": 1, "name": "Home", "item": BASE + "/"}]
+    items = [{
+        "position": 1,
+        "name": "Inicio" if lang == "es" else "Home",
+        "item": BASE + ("/es/" if lang == "es" else "/"),
+    }]
     for i, (name, url) in enumerate(crumbs, start=2):
         items.append({"position": i, "name": name, "item": url})
     return {
@@ -101,7 +107,7 @@ def breadcrumb(crumbs):
     }
 
 
-def service(path, name, description):
+def service(path, name, description, lang="en"):
     url = BASE + path
     return {
         "@context": "https://schema.org",
@@ -112,13 +118,13 @@ def service(path, name, description):
         "url": url,
         "serviceType": name,
         "provider": {"@id": BASE + "/#organization"},
-        "areaServed": "Americas",
+        "areaServed": "Américas" if lang == "es" else "Americas",
         "audience": {"@type": "BusinessAudience",
-                     "name": "Companies and organizations"},
+                     "name": "Empresas y organizaciones" if lang == "es" else "Companies and organizations"},
     }
 
 
-def software(path, name, description, features):
+def software(path, name, description, features, lang="en"):
     url = BASE + path
     return {
         "@context": "https://schema.org",
@@ -131,7 +137,7 @@ def software(path, name, description, features):
         "operatingSystem": "Web",
         "featureList": features,
         "offers": {"@type": "Offer", "price": "0", "priceCurrency": "USD",
-                   "description": "Contact Develo for a quote"},
+                   "description": "Contacte a Develo para solicitar una cotización" if lang == "es" else "Contact Develo for a quote"},
         "provider": {"@id": BASE + "/#organization"},
     }
 

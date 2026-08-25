@@ -12,6 +12,21 @@ Allow: /
 User-agent: GPTBot
 Allow: /
 
+# User-initiated ChatGPT retrieval (robots rules may not always apply, but the
+# intent is explicit for infrastructure that does consult this file).
+User-agent: ChatGPT-User
+Allow: /
+
+User-agent: Claude-SearchBot
+Allow: /
+
+User-agent: Claude-User
+Allow: /
+
+User-agent: ClaudeBot
+Allow: /
+
+# Legacy Anthropic user agent retained for older integrations.
 User-agent: Claude-Web
 Allow: /
 

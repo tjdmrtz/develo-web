@@ -18,10 +18,12 @@ develo-web/
 │   ├── industries/  case-studies/  insights/
 │   ├── about/  contact/  privacy-policy/  terms-and-conditions/
 │   ├── css/  js/
+│   ├── assets/                      # local fonts, favicon and social preview
 │   ├── robots.txt  sitemap.xml  llms.txt
 │   └── fix_indentation.md        # SEO/LLM-discoverability audit (not deployed)
 ├── sitegen/                      # Dev-only generator that renders develo/ from data
 ├── tests/                        # pytest suite (SEO, crawl, JS, screenshots) + node helpers
+├── cloudfront-clean-urls.js      # /about/ → /about/index.html at the edge
 ├── deploy.sh                     # S3 sync + CloudFront (create/lookup + invalidate)
 └── .github/workflows/deploy.yml  # CI/CD pipeline
 ```
@@ -38,7 +40,8 @@ The suite in `tests/` covers SEO metadata (unique titles, meta descriptions,
 single H1, canonical, OpenGraph), structured data (Organization, WebPage,
 Service, SoftwareApplication, Article, FAQPage, BreadcrumbList), sitemap /
 robots.txt / llms.txt, a full internal-link crawl, page-size budgets, the
-JavaScript functionality (Node), and headless-Chrome screenshots.
+JavaScript functionality (Node), clean production URLs, a real noindex 404,
+headless-Chrome interactions, and desktop/mobile screenshots.
 
 ```bash
 pytest tests/ -v            # everything
@@ -68,6 +71,8 @@ Pushing to `main` runs `.github/workflows/deploy.yml`:
 2. Runs `deploy.sh`:
    - syncs `develo/` to `s3://develo-web-eu-west-1` (the folder maps to the bucket root)
    - creates the CloudFront distribution on first run (ID cached in `.cloudfront/distribution-id`)
+   - publishes a small CloudFront Function so clean trailing-slash URLs resolve their directory index
+   - maps missing S3 keys to `404.html` with a real HTTP 404 (no soft-404 homepage fallback)
    - invalidates the CloudFront cache so changes propagate in minutes
 
 ## Infrastructure (account 346425562059)
@@ -96,6 +101,7 @@ CERTIFICATE_ARN=arn:aws:acm:us-east-1:346425562059:certificate/8c743979-c36f-460
 - `www.` is an alias handled by CloudFront (both names in the distribution);
   DNS has separate ALIAS records for apex and `www`.
 - HTTP is redirected to HTTPS by the distribution.
-- 403s from S3 are masked as `index.html` via CustomErrorResponses.
+- Clean URLs are rewritten to their directory `index.html` before the S3 request.
+- Missing S3 keys return the noindex `404.html` with HTTP status 404.
 - `robots.txt` explicitly allows AI search crawlers (OAI-SearchBot, GPTBot,
   Claude-Web) and `llms.txt` provides an LLM-friendly site map.

@@ -8,7 +8,6 @@ Run:  pytest tests/ -v
 """
 
 import json
-import os
 import re
 import shutil
 import socket
@@ -26,7 +25,7 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 SITE_ROOT = REPO_ROOT / "develo"
 BASE = "https://develo.software"
 
-EXPECTED_PAGES = [
+ENGLISH_PAGES = [
     "/",
     "/solutions/",
     "/solutions/custom-software-development/",
@@ -43,14 +42,22 @@ EXPECTED_PAGES = [
     "/industries/ecommerce-retail/",
     "/case-studies/",
     "/case-studies/tecnoland-distriland/",
+    "/case-studies/intervan/",
     "/insights/",
     "/insights/ai-agents-vs-chatbots/",
     "/about/",
     "/contact/",
     "/privacy-policy/",
     "/terms-and-conditions/",
-    "/es/",
 ]
+
+
+def spanish_path(path: str) -> str:
+    return "/es/" if path == "/" else "/es" + path
+
+
+SPANISH_PAGES = [spanish_path(path) for path in ENGLISH_PAGES]
+EXPECTED_PAGES = ENGLISH_PAGES + SPANISH_PAGES
 
 FORBIDDEN_PLACEHOLDERS = [
     "lorem ipsum",
@@ -126,8 +133,10 @@ def test_html_basics(page):
     soup = soup_of(page)
     assert soup.html is not None
     assert soup.html.get("lang") in ("en", "es"), f"{page}: bad/missing <html lang>"
-    if page == "/es/":
+    if page.startswith("/es/"):
         assert soup.html.get("lang") == "es"
+    else:
+        assert soup.html.get("lang") == "en"
 
 
 @pytest.mark.parametrize("page", EXPECTED_PAGES)
@@ -197,8 +206,10 @@ def test_jsonld_breadcrumbs(page):
     crumbs = jsonld_by_type(soup, "BreadcrumbList")
     assert crumbs, f"{page}: missing BreadcrumbList JSON-LD"
     items = crumbs[0].get("itemListElement", [])
-    assert items and items[0].get("name") == "Home"
-    assert items[0].get("item") == BASE + "/"
+    home_name = "Inicio" if page.startswith("/es/") else "Home"
+    home_url = BASE + ("/es/" if page.startswith("/es/") else "/")
+    assert items and items[0].get("name") == home_name
+    assert items[0].get("item") == home_url
     assert crumbs[0]["itemListElement"][-1].get("name"), f"{page}: last breadcrumb has no name"
 
 
@@ -207,9 +218,11 @@ def test_breadcrumb_nav(page):
     soup = soup_of(page)
     if page in ("/", "/es/"):
         return
-    nav = soup.find("nav", attrs={"aria-label": re.compile("breadcrumb", re.I)})
+    label = re.compile("ruta de navegación", re.I) if page.startswith("/es/") else re.compile("breadcrumb", re.I)
+    nav = soup.find("nav", attrs={"aria-label": label})
     assert nav, f"{page}: missing breadcrumb <nav>"
-    home_link = nav.find("a", href="/")
+    home_path = "/es/" if page.startswith("/es/") else "/"
+    home_link = nav.find("a", href=home_path)
     assert home_link, f"{page}: breadcrumb must link to home"
 
 
@@ -218,7 +231,9 @@ def test_footer_navigation_consistent():
         soup = soup_of(page)
         footer = soup.find("footer")
         assert footer, f"{page}: missing <footer>"
+        prefix = "/es" if page.startswith("/es/") else ""
         for target in ("/about/", "/solutions/", "/contact/", "/technologies/"):
+            target = prefix + target
             link = footer.find("a", href=target)
             assert link, f"{page}: footer missing link {target}"
         assert "develo" in footer.get_text().lower()
@@ -239,6 +254,112 @@ def test_every_page_references_css_js_and_schema(page):
     assert soup.find("link", rel="icon") or soup.find("link", rel="apple-touch-icon"), f"{page}: missing favicon"
 
 
+@pytest.mark.parametrize("page", EXPECTED_PAGES)
+def test_runtime_assets_are_local_and_reproducible(page):
+    """The local site must not need Wix (or any other CDN) to render."""
+    soup = soup_of(page)
+    stylesheet = soup.find("link", rel="stylesheet")
+    script = soup.find("script", src=True)
+    icon = soup.find("link", rel="icon")
+    assert stylesheet and stylesheet["href"].startswith("/"), page
+    assert script and script["src"].startswith("/"), page
+    assert icon and icon["href"].startswith("/assets/"), page
+
+    for prop in ("og:image", "twitter:image"):
+        image = soup.find("meta", attrs={"property": prop}) or soup.find(
+            "meta", attrs={"name": prop}
+        )
+        assert image, f"{page}: missing {prop}"
+        assert image["content"].startswith(BASE + "/assets/"), (
+            f"{page}: {prop} must be hosted with the site"
+        )
+        assert image["content"].endswith(".png"), f"{page}: {prop} needs a broadly supported raster preview"
+
+
+def test_original_visual_language_is_preserved():
+    """Regression contract derived from the live develo.ar visual audit."""
+    soup = soup_of("/")
+    room = soup.select_one("[data-spatial-hero]")
+    assert room, "home needs the original perspective-room hero"
+    planes = room.select(".floating-plane")
+    assert len(planes) >= 10
+    assert len(room.select(".depth-frame")) >= 6, "the room needs visible 3D depth"
+    assert len(room.select(".back-grid-line")) >= 10, \
+        "the back wall needs vertical lines so the room reads as a complete 3D grid"
+    assert room.select('.floating-plane[data-motion="x"]')
+    assert room.select('.floating-plane[data-motion="y"]')
+    assert all(not plane.has_attr("data-motion") for plane in room.select(".floating-plane.orange")), \
+        "red planes must stay fixed"
+    assert soup.select_one("[data-ticker]"), "home needs the moving mono ticker"
+    assert soup.select_one(".brand-wordmark"), "use the <develo> wordmark"
+    assert len(soup.select("[data-reveal]")) >= 8, "sections should reveal on scroll"
+
+    css = (SITE_ROOT / "css" / "style.css").read_text(encoding="utf-8").lower()
+    for token in ("#1d2cf3", "#d8400e", "space grotesk", "azeret mono"):
+        assert token in css, f"missing original design token {token}"
+    assert "--pointer-x" in css and "--pointer-y" in css
+    assert "prefers-reduced-motion: reduce" in css
+
+
+def test_motion_is_progressively_enhanced():
+    js = (SITE_ROOT / "js" / "main.js").read_text(encoding="utf-8")
+    assert "IntersectionObserver" in js
+    assert "prefers-reduced-motion" in js
+    assert "data-reveal" in js
+    assert 'queryselectorall("[data-motion]")' in js.lower()
+
+
+def test_every_book_a_meeting_button_is_a_real_link():
+    for page in EXPECTED_PAGES:
+        soup = soup_of(page)
+        for button in soup.select(".btn, .hero-action"):
+            if "book a meeting" not in button.get_text(" ", strip=True).lower():
+                continue
+            assert button.name == "a", f"{page}: Book a Meeting must be an anchor"
+            assert button.get("href", "").startswith("mailto:info@develo.ar"), page
+
+    home = soup_of("/")
+    hero_action = home.select_one(".hero .hero-action")
+    assert hero_action, "the first Book a Meeting action must exist in the DOM"
+    css = (SITE_ROOT / "css" / "style.css").read_text(encoding="utf-8")
+    assert not re.search(r'content\s*:\s*["\']Book a Meeting', css, re.I), \
+        "interactive actions cannot be generated with CSS"
+
+
+def test_ampersands_use_a_readable_glyph_wrapper():
+    for page in ("/", "/solutions/", "/solutions/d-ialog/", "/case-studies/"):
+        soup = soup_of(page)
+        visible_ampersands = [tag for tag in soup.select("h1, h2, h3, a") if "&" in tag.get_text()]
+        for tag in visible_ampersands:
+            assert tag.select_one(".amp"), f"{page}: unwrapped ampersand in {tag}"
+    assert "�" not in " ".join(soup_of(page).get_text() for page in EXPECTED_PAGES)
+
+
+def test_menu_exposes_product_and_both_case_studies():
+    soup = soup_of("/")
+    menu = soup.select_one("[data-nav-menu]")
+    assert menu
+    for href in (
+        "/solutions/d-ialog/",
+        "/case-studies/intervan/",
+        "/case-studies/tecnoland-distriland/",
+    ):
+        assert menu.find("a", href=href), f"menu must link directly to {href}"
+
+
+def test_contact_form_preserves_original_functionality():
+    soup = soup_of("/contact/")
+    form = soup.select_one("form[data-contact-form]")
+    assert form, "contact page needs the original inquiry form"
+    assert form.get("action") == "mailto:info@develo.ar"
+    for name in ("name", "company", "email", "message"):
+        field = form.find(attrs={"name": name})
+        assert field, f"contact form is missing {name}"
+    assert form.find(attrs={"name": "email"}).get("type") == "email"
+    assert form.find(attrs={"name": "email"}).has_attr("required")
+    assert form.find(attrs={"name": "message"}).has_attr("required")
+
+
 # ---------------------------------------------------------------------------
 # Technical SEO files (fix_indentation.md §17, §23, §24)
 # ---------------------------------------------------------------------------
@@ -251,6 +372,9 @@ def test_robots_txt():
     # AI search crawlers must be explicitly allowed (ChatGPT Search, etc.)
     assert "OAI-SearchBot" in text
     assert "GPTBot" in text
+    assert "ChatGPT-User" in text
+    assert "Claude-SearchBot" in text
+    assert "Claude-User" in text
     assert not re.search(r"Disallow:\s*/", text), "robots.txt must not disallow anything"
 
 
@@ -264,6 +388,27 @@ def test_sitemap_xml_matches_site():
     assert locs == expected, f"sitemap mismatch.\n missing={expected - locs}\n extra={locs - expected}"
     for loc in locs:
         assert loc.startswith(BASE + "/"), f"non-absolute sitemap URL: {loc}"
+
+
+def test_not_found_page_is_real_and_not_indexable():
+    path = SITE_ROOT / "404.html"
+    assert path.is_file(), "deployment needs a real 404 page"
+    soup = BeautifulSoup(path.read_text(encoding="utf-8"), "html.parser")
+    robots = soup.find("meta", attrs={"name": "robots"})
+    assert robots and "noindex" in robots.get("content", "").lower()
+    assert soup.find("a", href="/"), "404 page must link back home"
+
+
+def test_cloudfront_deployment_keeps_clean_urls_and_real_404s():
+    deploy = (REPO_ROOT / "deploy.sh").read_text(encoding="utf-8")
+    rewrite = REPO_ROOT / "cloudfront-clean-urls.js"
+    assert rewrite.is_file(), "missing CloudFront clean-URL function"
+    code = rewrite.read_text(encoding="utf-8")
+    assert 'uri.endsWith("/")' in code
+    assert 'uri += "/index.html"' in code
+    assert "FunctionAssociations" in deploy
+    assert 'ResponseCode: "404"' in deploy
+    assert 'ResponseCode: "200"' not in deploy, "soft-404 fallback hurts indexing"
 
 
 def test_llms_txt():
@@ -372,6 +517,26 @@ def test_homepage_positioning():
         assert soup.find("a", href=p), f"home must link {p}"
 
 
+def test_home_featured_product_copy_is_clean_and_links_to_product_page():
+    soup = soup_of("/")
+    heading = next(
+        (h for h in soup.find_all("h2") if "featured product" in h.get_text(" ", strip=True).lower()),
+        None,
+    )
+    assert heading
+    assert "by develo" not in heading.get_text(" ", strip=True).lower()
+    assert soup.find("a", href="/solutions/d-ialog/"), "the product promotion must open its detail page"
+
+
+def test_capabilities_include_multitenant_and_high_scale_products():
+    text = " ".join(
+        soup_of(path).get_text(" ", strip=True)
+        for path in ("/", "/solutions/custom-software-development/", "/solutions/d-ialog/")
+    )
+    assert re.search(r"multi[- ]?tenant", text, re.I)
+    assert re.search(r"highly scalable products", text, re.I)
+
+
 def test_home_hreflang_es_en():
     soup = soup_of("/")
     for lang, href in (("en", BASE + "/"), ("es", BASE + "/es/"), ("x-default", BASE + "/")):
@@ -390,6 +555,91 @@ def test_es_homepage():
     assert tag and tag["href"] == BASE + "/"
     text = soup.get_text(" ", strip=True)
     assert "inteligencia artificial" in text.lower()
+
+
+@pytest.mark.parametrize("english_path", ENGLISH_PAGES)
+def test_every_page_has_an_exact_reciprocal_language_version(english_path):
+    spanish = spanish_path(english_path)
+    en_soup = soup_of(english_path)
+    es_soup = soup_of(spanish)
+
+    for soup, lang, alternate in (
+        (en_soup, "es", BASE + spanish),
+        (es_soup, "en", BASE + english_path),
+    ):
+        link = soup.find("link", attrs={"hreflang": lang})
+        assert link and link.get("href") == alternate
+
+    en_switch = en_soup.select_one(".header-language")
+    es_switch = es_soup.select_one(".header-language")
+    assert en_switch and en_switch.get("href") == spanish
+    assert es_switch and es_switch.get("href") == english_path
+
+
+@pytest.mark.parametrize("page", SPANISH_PAGES)
+def test_spanish_chrome_and_calls_to_action_are_fully_translated(page):
+    soup = soup_of(page)
+    visible = soup.get_text(" ", strip=True)
+    menu = soup.select_one("[data-nav-menu]")
+    footer = soup.find("footer")
+    assert menu and footer
+
+    for required in (
+        "Inicio", "Soluciones", "Tecnologías", "Casos de éxito",
+        "Nosotros", "Agendar reunión", "Todos los derechos reservados",
+    ):
+        assert required.lower() in visible.lower(), f"{page}: missing Spanish UI copy {required!r}"
+
+    for forbidden in (
+        "Book a Meeting", "Learn more", "Go to page", "View all case studies",
+        "Your name", "Prepare email", "Skip to content", "All rights reserved",
+    ):
+        assert forbidden.lower() not in visible.lower(), f"{page}: untranslated UI copy {forbidden!r}"
+
+    for link in soup.find_all("a", href=True):
+        href = link["href"]
+        if href.startswith("/") and not link.get("hreflang"):
+            assert href.startswith("/es/"), f"{page}: Spanish page points outside locale: {href}"
+
+
+@pytest.mark.parametrize("page", ENGLISH_PAGES)
+def test_english_chrome_stays_fully_english(page):
+    soup = soup_of(page)
+    visible = soup.get_text(" ", strip=True)
+    assert "Book a Meeting" in visible
+    for forbidden in ("Agendar reunión", "Casos de éxito", "Todos los derechos reservados"):
+        assert forbidden.lower() not in visible.lower(), f"{page}: Spanish UI leaked into English"
+    for link in soup.find_all("a", href=True):
+        href = link["href"]
+        if href.startswith("/") and not link.get("hreflang"):
+            assert not href.startswith("/es/"), f"{page}: English page points into Spanish locale: {href}"
+
+
+def test_card_spacing_and_current_breadcrumb_design_contracts():
+    css = (SITE_ROOT / "css" / "style.css").read_text(encoding="utf-8")
+    final_card_rule = css.rsplit(".card {", 1)[-1].split("}", 1)[0]
+    assert "justify-content: space-between" not in final_card_rule
+    assert re.search(r"\.card h3\s*\{[^}]*margin-bottom:\s*(?:0?\.[0-9]+|[0-9]+)rem", css, re.S)
+    assert re.search(r"\.breadcrumbs \[aria-current\]\s*\{[^}]*color:\s*var\(--orange\)", css, re.S)
+
+
+def test_dialog_showcase_has_smooth_focus_layout_without_click_action():
+    soup = soup_of("/solutions/d-ialog/")
+    css = (SITE_ROOT / "css" / "style.css").read_text(encoding="utf-8")
+    assert "data-product-showcase" in soup.decode()
+    assert all(shot.select_one(":scope > .product-shot-visual") for shot in soup.select(".product-shot")), \
+        "the stationary hover target and transformed visual layer must be separate"
+    assert re.search(r"\.product-showcase[^\{]*:has\([^)]*product-shot-secondary:hover", css)
+    assert "transition" in css[css.find(".product-shot-visual {"):css.find(".product-shot-visual {") + 500]
+    assert "transition: grid-template-columns" not in css
+    hover_rule = re.search(
+        r"\.product-showcase:has\(\.product-shot-secondary:hover\)\s*\{([^}]*)\}",
+        css,
+        re.S,
+    )
+    assert hover_rule and "grid-template-columns" not in hover_rule.group(1), \
+        "hover must use composited transforms without changing document flow"
+    assert ".product-screen-link" not in css
 
 
 def test_technologies_section():
@@ -453,6 +703,27 @@ def test_dialog_repositioned():
     assert faq and len(faq[0].get("mainEntity", [])) >= 3, "d-ialog: need FAQ (>=3 Qs)"
 
 
+def test_dialog_product_screens_are_integrated_as_real_local_media():
+    soup = soup_of("/solutions/d-ialog/")
+    showcase = soup.select_one(".product-showcase")
+    assert showcase, "d-ialog should lead with a polished product showcase"
+    images = showcase.select("img.product-screen")
+    assert len(images) == 2
+    assert images[0].get("fetchpriority") == "high"
+    for image in images:
+        src = image.get("src", "")
+        assert src.startswith("/assets/products/dialog-")
+        assert image.get("alt", "").strip()
+        assert image.get("width") and image.get("height"), "reserve media space to prevent layout shift"
+        assert (SITE_ROOT / src.lstrip("/")).is_file(), f"missing product image {src}"
+        assert image.find_parent("a") is None, "product screenshots are presentations, not outbound links"
+
+    first_h2 = soup.find("h2")
+    first_content_block = soup.select_one(".content > .content-block")
+    assert first_h2 and showcase.find_parent("section") is first_content_block, \
+        "product screenshots should appear immediately after the product introduction"
+
+
 def test_develomultiagent_page():
     soup = soup_of("/solutions/develomultiagent/")
     text = soup.get_text(" ", strip=True).lower()
@@ -481,6 +752,52 @@ def test_case_study():
         assert re.search(section, text), f"case study should have a '{section}' section"
     assert "Case Study" in soup.title.get_text(strip=True)
     assert jsonld_by_type(soup, "Article")
+
+
+def test_case_study_logos_are_used_without_oversizing():
+    expected = {
+        "/case-studies/": {"distriland", "intervan"},
+        "/case-studies/tecnoland-distriland/": {"distriland"},
+        "/case-studies/intervan/": {"intervan"},
+    }
+    for page, brands in expected.items():
+        soup = soup_of(page)
+        logos = soup.select("img.client-logo")
+        sources = " ".join(image.get("src", "") for image in logos).lower()
+        for brand in brands:
+            assert brand in sources, f"{page}: missing {brand} logo"
+        for image in logos:
+            assert image.get("width") and image.get("height")
+
+
+def test_intervan_case_study_is_concise_complete_and_structured():
+    soup = soup_of("/case-studies/intervan/")
+    text = soup.get_text(" ", strip=True)
+    assert jsonld_by_type(soup, "Article")
+    assert "Intervan" in text
+    for section in ("Need", "Solution", "Architecture", "Outcome"):
+        assert soup.find(["h2", "h3"], string=re.compile(section, re.I)), section
+    for term in (
+        "1,000+ users",
+        "copilot",
+        "backoffice",
+        "MCP",
+        "dynamic knowledge base",
+        "metrics",
+        "configuration",
+        "multitenant",
+        "traceability",
+    ):
+        assert re.search(re.escape(term), text, re.I), f"Intervan case must mention {term}"
+    assert len(text.split()) < 750, "the case study should stay concrete and scannable"
+    assert not re.search(r"\bToba\b", text, re.I), \
+        "the public case study must refer only to Intervan's system"
+
+
+def test_case_studies_hub_links_both_real_implementations():
+    soup = soup_of("/case-studies/")
+    assert soup.find("a", href="/case-studies/intervan/")
+    assert soup.find("a", href="/case-studies/tecnoland-distriland/")
 
 
 def test_insights_article():
@@ -551,3 +868,13 @@ def test_screenshots_render(live_server, tmp_path):
         )
         assert result.returncode == 0, f"screenshot {name} failed: {result.stderr}"
         assert out.stat().st_size > 20_000, f"screenshot {name} looks empty ({out.stat().st_size} bytes)"
+
+
+@pytest.mark.screenshot
+def test_browser_interactions(live_server):
+    """Exercise the menu, motion, responsive layout and resource loading."""
+    result = subprocess.run(
+        [NODE, str(REPO_ROOT / "tests" / "browser_check.js"), live_server],
+        timeout=120, capture_output=True, text=True,
+    )
+    assert result.returncode == 0, f"browser interaction test failed:\n{result.stdout}\n{result.stderr}"
