@@ -126,6 +126,7 @@ a:hover { text-decoration: underline; }
 }
 .btn:hover { background: #7dd3fc; text-decoration: none; transform: translateY(-1px); }
 .btn-small { padding: 0.45rem 1rem; font-size: 0.9rem; }
+.btn[hidden] { display: none !important; }
 
 /* ---------- Hero ---------- */
 .hero {
@@ -337,6 +338,103 @@ footer {
   .lang-switch { border-left: 0; padding-left: 0; }
   .hero { padding: 2.25rem 0 1rem; }
   .content h2 { margin-top: 2rem; }
+}
+
+/* ---------- LLM visualization ---------- */
+.llm-tech-section { margin: 2.75rem 0 1.5rem; }
+.llm-tech-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 0.42fr) minmax(0, 0.58fr);
+  gap: 1.5rem;
+  align-items: start;
+}
+.llm-tech-copy .eyebrow {
+  color: var(--accent);
+  font-size: 0.75rem;
+  letter-spacing: 0.08em;
+  font-weight: 700;
+  margin-bottom: 0.6rem;
+}
+.llm-tech-copy h2 { margin-top: 0; }
+.technology-line { color: var(--muted); font-size: 0.95rem; }
+.llm-viz-explain { margin: 0 0 1rem 1.1rem; color: #cbd5e1; }
+.llm-viz-explain li { margin-bottom: 0.4rem; }
+.llm-viz-shell {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  overflow: hidden;
+  padding: 1rem;
+}
+.llm-viz-caption {
+  font-size: 0.72rem;
+  letter-spacing: 0.08em;
+  font-weight: 700;
+  color: var(--accent);
+  margin: 0;
+}
+.llm-viz-dims { color: var(--muted); font-size: 0.85rem; margin: 0.2rem 0 0.75rem; }
+.llm-viz-stage {
+  position: relative;
+  height: clamp(520px, 46vw, 680px);
+  min-height: 360px;
+  background: var(--bg-soft);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  overflow: hidden;
+  touch-action: pan-y;
+}
+.llm-viz-stage canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+  opacity: 0;
+  transition: opacity 250ms ease;
+}
+.llm-tech-section.is-ready .llm-viz-stage canvas { opacity: 1; }
+.llm-viz-fallback {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  padding: 1rem;
+}
+.llm-tech-section.is-ready:not(.is-fallback) .llm-viz-fallback { opacity: 0; pointer-events: none; transition: opacity 250ms ease; }
+.llm-viz-diagram { width: 100%; height: auto; }
+.llm-viz-dom-overlay {
+  position: absolute;
+  left: 0.75rem;
+  right: 0.75rem;
+  bottom: 0.75rem;
+  pointer-events: none;
+}
+.llm-viz-stage-title { font-weight: 700; margin: 0; color: var(--text); }
+.llm-viz-stage-desc, .llm-viz-probs, .llm-viz-hint { margin: 0.2rem 0 0; color: var(--muted); font-size: 0.9rem; }
+.llm-viz-controls { margin-top: 0.85rem; }
+.llm-viz-progress {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem 0.75rem;
+  list-style: none;
+  color: var(--muted);
+  font-size: 0.78rem;
+  margin: 0 0 0.7rem;
+}
+.llm-viz-progress .is-active { color: var(--accent); font-weight: 700; }
+.llm-viz-buttons { display: flex; flex-wrap: wrap; gap: 0.5rem; }
+button.btn {
+  border: 0;
+  cursor: pointer;
+  font: inherit;
+}
+.llm-viz-disclaimer { color: var(--muted); font-size: 0.82rem; margin: 0.75rem 0 0; max-width: none; }
+@media (max-width: 860px) {
+  .llm-tech-layout { grid-template-columns: 1fr; }
+  .llm-viz-stage { height: clamp(360px, 105vw, 500px); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .llm-viz-stage canvas, .llm-tech-section.is-ready:not(.is-fallback) .llm-viz-fallback { transition: none; }
 }
 """
 

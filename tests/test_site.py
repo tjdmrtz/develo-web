@@ -40,6 +40,7 @@ EXPECTED_PAGES = [
     "/solutions/d-ialog/",
     "/solutions/develomultiagent/",
     "/technologies/",
+    "/es/technologies/",
     "/industries/ecommerce-retail/",
     "/case-studies/",
     "/case-studies/tecnoland-distriland/",
@@ -521,6 +522,80 @@ def test_all_pages_load_the_year_element():
     for page in EXPECTED_PAGES:
         soup = soup_of(page)
         assert soup.find(id="year"), f"{page}: footer must contain #year"
+
+
+def _heading_texts(page: str):
+    soup = soup_of(page)
+    return [h.get_text(" ", strip=True) for h in soup.select("main h1, main h2")]
+
+
+def test_en_home_llm_viz_position():
+    headings = _heading_texts("/")
+    assert headings.count("What we do") == 1
+    i = headings.index("What we do")
+    assert "AI systems you can understand, control and put into production." in headings[i + 1]
+    assert headings[i + 2] == "Our method: from insight to impact"
+    soup = soup_of("/")
+    assert soup.find("a", href="/technologies/")
+    assert "tiny GPT-style model" in soup.get_text(" ", strip=True)
+    assert len(soup.select("[data-llm-viz]")) == 1
+    assert soup.select_one("[data-llm-viz] canvas")["aria-hidden"] == "true"
+    assert soup.select_one("[data-llm-explore]").name == "button"
+
+
+def test_es_home_llm_viz_position():
+    headings = _heading_texts("/es/")
+    i = headings.index("Qué hacemos")
+    assert "Sistemas de IA que podés entender, controlar y llevar a producción." in headings[i + 1]
+    assert headings[i + 2].startswith("Nuestro método")
+    soup = soup_of("/es/")
+    assert soup.find("a", href="/es/technologies/")
+    assert len(soup.select("[data-llm-viz]")) == 1
+
+
+def test_en_technologies_llm_viz_position():
+    headings = _heading_texts("/technologies/")
+    i = headings.index("LLMs, RAG and fine-tuning")
+    assert "AI systems you can understand, control and put into production." in headings[i + 1]
+    assert headings[i + 2] == "Data & search layer"
+
+
+def test_es_technologies_llm_viz_position():
+    headings = _heading_texts("/es/technologies/")
+    i = headings.index("Fine-tuning de LLMs")
+    assert "Sistemas de IA que podés entender, controlar y llevar a producción." in headings[i + 1]
+    assert headings[i + 2] == "Evaluación y observabilidad"
+
+
+def test_llm_viz_assets_present():
+    base = SITE_ROOT / "llm-viz" / "bycroft-9da9374"
+    for name in ("gpt-nano-sort-model.json", "gpt-nano-sort-t0-partials.json", "native.wasm"):
+        p = base / name
+        assert p.is_file() and p.stat().st_size > 0, name
+    assert (base / "fonts" / "font-atlas.png").stat().st_size > 0
+    assert (base / "fonts" / "font-def.json").stat().st_size > 0
+
+
+def test_llm_viz_unit_node():
+    node = shutil.which("node")
+    assert node, "node not installed"
+    result = subprocess.run(
+        [node, "--test", str(REPO_ROOT / "tests" / "llm-visualization" / "test_unit.mjs")],
+        capture_output=True, text=True, timeout=30,
+    )
+    assert result.returncode == 0, f"llm viz unit tests failed:\n{result.stdout}\n{result.stderr}"
+
+
+def test_llm_viz_scroll_over_canvas(live_server):
+    node = shutil.which("node")
+    assert node, "node not installed"
+    result = subprocess.run(
+        [node, str(REPO_ROOT / "tests" / "llm-visualization" / "e2e_scroll.js"), live_server],
+        capture_output=True, text=True, timeout=90,
+    )
+    if "SKIP: no Chrome" in (result.stdout + result.stderr):
+        pytest.skip("no Chrome/Chromium for scroll E2E")
+    assert result.returncode == 0, f"scroll e2e failed:\n{result.stdout}\n{result.stderr}"
 
 
 # ---------------------------------------------------------------------------
