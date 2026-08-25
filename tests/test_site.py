@@ -40,7 +40,6 @@ EXPECTED_PAGES = [
     "/solutions/d-ialog/",
     "/solutions/develomultiagent/",
     "/technologies/",
-    "/es/technologies/",
     "/industries/ecommerce-retail/",
     "/case-studies/",
     "/case-studies/tecnoland-distriland/",
@@ -531,40 +530,42 @@ def _heading_texts(page: str):
 
 def test_en_home_llm_viz_position():
     headings = _heading_texts("/")
-    assert headings.count("What we do") == 1
-    i = headings.index("What we do")
-    assert "AI systems you can understand, control and put into production." in headings[i + 1]
-    assert headings[i + 2] == "Our method: from insight to impact"
+    assert headings[headings.index("What we do") + 1] == "Our method: from insight to impact"
+    i = headings.index("The technology behind Develo")
+    assert headings[i + 1] == "Results, not promises"
     soup = soup_of("/")
     assert soup.find("a", href="/technologies/")
+    assert "We engineer on" in soup.get_text(" ", strip=True)
     assert "tiny GPT-style model" in soup.get_text(" ", strip=True)
-    assert len(soup.select("[data-llm-viz]")) == 1
-    assert soup.select_one("[data-llm-viz] canvas")["aria-hidden"] == "true"
+    tech = soup.find("h2", string="The technology behind Develo")
+    viz = soup.select_one("[data-llm-viz]")
+    assert tech and viz
+    assert tech.find_next("div", attrs={"data-llm-viz": True}) is viz
+    assert viz.select_one("canvas")["aria-hidden"] == "true"
     assert soup.select_one("[data-llm-explore]").name == "button"
 
 
 def test_es_home_llm_viz_position():
     headings = _heading_texts("/es/")
-    i = headings.index("Qué hacemos")
-    assert "Sistemas de IA que podés entender, controlar y llevar a producción." in headings[i + 1]
-    assert headings[i + 2].startswith("Nuestro método")
+    assert headings[headings.index("Qué hacemos") + 1].startswith("Nuestro método")
+    i = headings.index("La tecnología detrás de Develo")
+    assert headings[i + 1].startswith("Resultados")
     soup = soup_of("/es/")
-    assert soup.find("a", href="/es/technologies/")
+    assert soup.find("a", href="/technologies/")
     assert len(soup.select("[data-llm-viz]")) == 1
+    tech = soup.find("h2", string="La tecnología detrás de Develo")
+    viz = soup.select_one("[data-llm-viz]")
+    assert tech.find_next("div", attrs={"data-llm-viz": True}) is viz
 
 
 def test_en_technologies_llm_viz_position():
     headings = _heading_texts("/technologies/")
     i = headings.index("LLMs, RAG and fine-tuning")
-    assert "AI systems you can understand, control and put into production." in headings[i + 1]
-    assert headings[i + 2] == "Data & search layer"
-
-
-def test_es_technologies_llm_viz_position():
-    headings = _heading_texts("/es/technologies/")
-    i = headings.index("Fine-tuning de LLMs")
-    assert "Sistemas de IA que podés entender, controlar y llevar a producción." in headings[i + 1]
-    assert headings[i + 2] == "Evaluación y observabilidad"
+    assert headings[i + 1] == "Data & search layer"
+    soup = soup_of("/technologies/")
+    heading = soup.find("h2", string="LLMs, RAG and fine-tuning")
+    viz = soup.select_one("[data-llm-viz]")
+    assert heading.find_next("div", attrs={"data-llm-viz": True}) is viz
 
 
 def test_llm_viz_assets_present():

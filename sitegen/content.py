@@ -53,7 +53,6 @@ PAGES = [
                  "body": "Autonomous agents that connect to your systems, answer customers and execute workflows with human oversight.",
                  "href": "/solutions/ai-agents/"},
             ]},
-            {"t": "llm-viz", "variant": "home"},
             {"t": "h2", "text": "Our method: from insight to impact"},
             {"t": "grid", "cols": 4, "items": [
                 {"title": "Need Exploration",
@@ -99,7 +98,26 @@ PAGES = [
                  "body": "Browse the complete map of what Develo builds.",
                  "href": "/solutions/"},
             ]},
+            {"t": "h2", "text": "The technology behind Develo"},
+            {"t": "p", "html": (
+                "We engineer on <strong>AWS</strong>, run large language models "
+                "through <strong>Amazon Bedrock</strong>, build "
+                "<strong>autonomous AI agents</strong> with tool access over the "
+                "<strong>Model Context Protocol (MCP)</strong>, and apply "
+                "<strong>RAG and LLM fine-tuning</strong> where it measurably "
+                "improves quality."
+            )},
+            {"t": "llm-viz", "variant": "home"},
+            {"t": "links", "items": [
+                {"label": "Our Technology Stack", "href": "/technologies/",
+                 "note": "AWS, Bedrock, AI agents, MCP and LLM fine-tuning"},
+            ]},
             {"t": "h2", "text": "Results, not promises"},
+            {"t": "p", "html": (
+                "We put the work in front of the words. See how Develo helped "
+                "Tecnoland and Distriland reinvent their digital customer "
+                "experience."
+            )},
             {"t": "links", "items": [
                 {"label": "Case Study: Tecnoland & Distriland", "href": "/case-studies/tecnoland-distriland/",
                  "note": "Digital customer experience for tech services and ecommerce"},
@@ -948,9 +966,6 @@ PAGES = [
         ),
         "crumbs": [("Technologies", "https://develo.software/technologies/")],
         "schema": ["service"],
-        "hreflang": {"en": "https://develo.software/technologies/",
-                     "es": "https://develo.software/es/technologies/",
-                     "x-default": "https://develo.software/technologies/"},
         "sections": [
             {"t": "h2", "text": "AWS — our cloud foundation"},
             {"t": "p", "html": (
@@ -1037,78 +1052,6 @@ PAGES = [
             {"t": "cta",
              "title": "Discuss architecture with our engineers",
              "body": "Bring your use case; we'll talk through models, architecture, costs and a PoC plan."},
-        ],
-    },
-
-    {
-        "path": "/es/technologies/",
-        "lang": "es",
-        "title": "Tecnologías: AWS, Bedrock, Agentes y Fine-Tuning | Develo",
-        "description": (
-            "Elegimos tecnología por confiabilidad y valor operativo: AWS, "
-            "Amazon Bedrock, agentes autónomos, MCP, RAG y fine-tuning de LLMs."
-        ),
-        "h1": "Las Tecnologías con las que Construye Develo",
-        "intro": (
-            "Elegimos tecnología por confiabilidad, seguridad y valor operativo. "
-            "Estas son las piezas que usamos para llevar software e inteligencia "
-            "artificial a producción."
-        ),
-        "crumbs": [("Tecnologías", "https://develo.software/es/technologies/")],
-        "schema": ["service"],
-        "hreflang": {"en": "https://develo.software/technologies/",
-                     "es": "https://develo.software/es/technologies/",
-                     "x-default": "https://develo.software/technologies/"},
-        "sections": [
-            {"t": "h2", "text": "AWS"},
-            {"t": "p", "html": (
-                "Diseñamos infraestructura segura y escalable sobre "
-                "<strong>AWS</strong>: cómputo, almacenamiento, redes, "
-                "identidad, eventos, observabilidad y despliegues automatizados."
-            )},
-            {"t": "h2", "text": "Amazon Bedrock y LLMs"},
-            {"t": "p", "html": (
-                "Usamos <strong>Amazon Bedrock</strong> para acceder a modelos "
-                "fundacionales con controles empresariales. Evaluamos calidad, "
-                "latencia y costo antes de seleccionar o cambiar un LLM."
-            )},
-            {"t": "h2", "text": "Agentes autónomos y MCP"},
-            {"t": "p", "html": (
-                "Construimos <strong>agentes autónomos</strong> con herramientas "
-                "explícitas mediante <strong>Model Context Protocol (MCP)</strong>, "
-                "permisos mínimos, guardrails, confirmaciones y supervisión humana."
-            )},
-            {"t": "h2", "text": "RAG, búsqueda vectorial y conocimiento"},
-            {"t": "p", "html": (
-                "Combinamos <strong>Retrieval-Augmented Generation (RAG)</strong>, "
-                "embeddings, bases vectoriales, reranking y fuentes visibles para "
-                "responder con conocimiento dinámico y verificable."
-            )},
-            {"t": "h2", "text": "Fine-tuning de LLMs"},
-            {"t": "p", "html": (
-                "Aplicamos <strong>fine-tuning de LLMs</strong> solo cuando una "
-                "evaluación demuestra que supera a instrucciones, ejemplos o RAG "
-                "para el comportamiento requerido."
-            )},
-            {"t": "llm-viz", "variant": "tech"},
-            {"t": "h2", "text": "Evaluación y observabilidad"},
-            {"t": "p", "html": (
-                "Registramos trazas, calidad, seguridad, latencia, costo y uso. "
-                "Las evaluaciones automáticas y humanas convierten el desempeño "
-                "de IA en una métrica operable."
-            )},
-            {"t": "h2", "text": "Dónde aplicamos esta arquitectura"},
-            {"t": "links", "items": [
-                {"label": "d-ialog", "href": "/solutions/d-ialog/",
-                 "note": "IA conversacional multitenant"},
-                {"label": "Agentes de IA", "href": "/solutions/ai-agents/",
-                 "note": "Herramientas y flujos gobernados"},
-                {"label": "Software a medida", "href": "/solutions/custom-software-development/",
-                 "note": "Productos preparados para escalar"},
-            ]},
-            {"t": "cta",
-             "title": "Diseñemos una arquitectura adecuada",
-             "body": "La mejor tecnología es la que reduce riesgo y mejora un resultado concreto."},
         ],
     },
 
@@ -1743,7 +1686,6 @@ PAGES = [
                  "body": "Agentes autónomos que se conectan a sus sistemas, responden a clientes y ejecutan flujos con supervisión humana.",
                  "href": "/solutions/ai-agents/"},
             ]},
-            {"t": "llm-viz", "variant": "home"},
             {"t": "h2", "text": "Nuestro método: del conocimiento al impacto"},
             {"t": "grid", "cols": 4, "items": [
                 {"title": "Exploración de la Necesidad",
@@ -1789,6 +1731,20 @@ PAGES = [
                 {"title": "Todas las Soluciones",
                  "body": "Explore el mapa completo de lo que Develo construye.",
                  "href": "/solutions/"},
+            ]},
+            {"t": "h2", "text": "La tecnología detrás de Develo"},
+            {"t": "p", "html": (
+                "Ingenierizamos en <strong>AWS</strong>, ejecutamos modelos de "
+                "lenguaje a través de <strong>Amazon Bedrock</strong>, "
+                "construimos <strong>agentes de IA autónomos</strong> con "
+                "acceso a herramientas vía el <strong>Model Context Protocol "
+                "(MCP)</strong> y aplicamos <strong>RAG y fine-tuning de "
+                "LLMs</strong> donde mejoran mediblemente la calidad."
+            )},
+            {"t": "llm-viz", "variant": "home"},
+            {"t": "links", "items": [
+                {"label": "Nuestra Pila Tecnológica", "href": "/technologies/",
+                 "note": "AWS, Bedrock, agentes de IA, MCP y fine-tuning"},
             ]},
             {"t": "h2", "text": "Resultados, no promesas"},
             {"t": "p", "html": (

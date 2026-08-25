@@ -242,17 +242,9 @@ def render_llm_viz(page: dict, block: dict) -> str:
     lang = page["lang"]
     variant = block.get("variant", "home")
     copy = LLM_VIZ[lang]
-    title_id = "llm-tech-title"
     progress = "".join(
         f'<li data-llm-progress-item>{esc(label)}</li>' for label in copy["progress"]
     )
-    explain = ""
-    if variant == "tech":
-        items = "".join(
-            f"<li><strong>{esc(it['t'])}</strong> {esc(it['d'])}</li>"
-            for it in copy["techExplain"]
-        )
-        explain = f'<ul class="llm-viz-explain">{items}</ul>'
     fallback = (
         '<div class="llm-viz-fallback" data-llm-fallback>'
         '<p class="llm-viz-fallback-msg" data-llm-fallback-msg hidden>'
@@ -272,97 +264,59 @@ def render_llm_viz(page: dict, block: dict) -> str:
         "</svg></div>"
     )
     return f"""
-<section class="llm-tech-section" aria-labelledby="{title_id}" data-llm-viz data-lang="{lang}" data-variant="{variant}">
-  <div class="llm-tech-layout">
-    <div class="llm-tech-copy">
-      <p class="eyebrow">{esc(copy["eyebrow"])}</p>
-      <h2 id="{title_id}">{esc(copy["title"])}</h2>
-      <p>{esc(copy["body"])}</p>
-      <p class="technology-line">{esc(copy["stack"])}</p>
-      {explain}
-      <a class="btn btn-small" href="{esc(copy["ctaHref"])}">{esc(copy["cta"])}</a>
-    </div>
-    <div class="llm-viz-shell">
-      <div class="llm-viz-meta">
-        <p class="llm-viz-caption">{esc(copy["caption"])}</p>
-        <p class="llm-viz-dims">{esc(copy["dims"])}</p>
-      </div>
-      <div class="llm-viz-stage" style="touch-action: pan-y" role="region" aria-label="{esc(copy["region"])}">
-        {fallback}
-        <canvas data-llm-canvas aria-hidden="true"></canvas>
-        <div class="llm-viz-dom-overlay">
-          <p class="llm-viz-stage-title" data-llm-stage-title>{esc(copy["stages"]["tokens"]["title"])}</p>
-          <p class="llm-viz-stage-desc" data-llm-stage-desc>{esc(copy["stages"]["tokens"]["description"])}</p>
-          <p class="llm-viz-probs" data-llm-probs></p>
-          <p class="llm-viz-hint" data-llm-hint hidden></p>
-        </div>
-      </div>
-      <div class="llm-viz-controls">
-        <ol class="llm-viz-progress" aria-hidden="true">{progress}</ol>
-        <div class="llm-viz-buttons">
-          <button type="button" class="btn btn-small" data-llm-explore>{esc(copy["explore"])}</button>
-          <button type="button" class="btn btn-small" data-llm-reset hidden>{esc(copy["reset"])}</button>
-          <button type="button" class="btn btn-small" data-llm-replay hidden>{esc(copy["replay"])}</button>
-        </div>
-      </div>
-      <p class="llm-viz-disclaimer">{esc(copy["disclaimer"])}</p>
+<div class="llm-viz-shell" data-llm-viz data-lang="{lang}" data-variant="{variant}">
+  <div class="llm-viz-meta">
+    <p class="llm-viz-caption">{esc(copy["caption"])}</p>
+    <p class="llm-viz-dims">{esc(copy["dims"])}</p>
+  </div>
+  <div class="llm-viz-stage" style="touch-action: pan-y" role="region" aria-label="{esc(copy["region"])}">
+    {fallback}
+    <canvas data-llm-canvas aria-hidden="true"></canvas>
+    <div class="llm-viz-dom-overlay">
+      <p class="llm-viz-stage-title" data-llm-stage-title>{esc(copy["stages"]["tokens"]["title"])}</p>
+      <p class="llm-viz-stage-desc" data-llm-stage-desc>{esc(copy["stages"]["tokens"]["description"])}</p>
+      <p class="llm-viz-probs" data-llm-probs></p>
+      <p class="llm-viz-hint" data-llm-hint hidden></p>
     </div>
   </div>
-</section>
+  <div class="llm-viz-controls">
+    <ol class="llm-viz-progress" aria-hidden="true">{progress}</ol>
+    <div class="llm-viz-buttons">
+      <button type="button" class="btn btn-small" data-llm-explore>{esc(copy["explore"])}</button>
+      <button type="button" class="btn btn-small" data-llm-reset hidden>{esc(copy["reset"])}</button>
+      <button type="button" class="btn btn-small" data-llm-replay hidden>{esc(copy["replay"])}</button>
+    </div>
+  </div>
+  <p class="llm-viz-disclaimer">{esc(copy["disclaimer"])}</p>
+</div>
 """
 
 
 LLM_VIZ = {
     "en": {
-        "eyebrow": "THE TECHNOLOGY BEHIND DEVELO",
-        "title": "AI systems you can understand, control and put into production.",
-        "body": "From tokens and attention to agents, retrieval and business actions, we engineer the layers that turn modern AI into reliable software.",
-        "stack": "AWS · Amazon Bedrock · LLMs · RAG · AI Agents · MCP",
         "explore": "Explore how it works",
         "reset": "Reset",
         "replay": "Replay",
-        "cta": "View our technology stack",
-        "ctaHref": "/technologies/",
         "caption": "LIVE TRANSFORMER VISUALIZATION",
         "dims": "3 layers · 3 attention heads · 48-dimensional embeddings",
         "disclaimer": "A real tiny GPT-style model sorting A/B/C tokens. The model is intentionally small so its internal computation can be explored visually; production LLMs operate at vastly larger scale.",
         "unavailable": "Interactive model visualization is unavailable in this browser. The transformer flow is shown in a simplified static view.",
         "region": "Interactive visualization of a small three-layer GPT-style transformer processing and sorting A, B and C tokens through embeddings, self-attention, transformer layers and next-token probabilities.",
         "progress": ["Tokens", "Embeddings", "Q/K/V", "Attention", "Layers", "Output", "Prediction"],
-        "techExplain": [
-            {"t": "Tokens", "d": "Discrete inputs enter the model."},
-            {"t": "Embeddings", "d": "Tokens become learned vectors plus positional information."},
-            {"t": "Self-attention", "d": "Each position weights relevant earlier context through Query, Key and Value."},
-            {"t": "Transformer layers", "d": "Attention and feed-forward transformations repeat through residual paths."},
-            {"t": "Prediction", "d": "The final representation becomes probabilities for the next token."},
-        ],
         "stages": {
             "tokens": {"title": "1 · Tokens", "description": "The model receives discrete tokens. This demo starts with C B A B B C."},
         },
     },
     "es": {
-        "eyebrow": "LA TECNOLOGÍA DETRÁS DE DEVELO",
-        "title": "Sistemas de IA que podés entender, controlar y llevar a producción.",
-        "body": "Desde tokens y atención hasta agentes, recuperación de conocimiento y acciones de negocio, diseñamos las capas que convierten la IA moderna en software confiable.",
-        "stack": "AWS · Amazon Bedrock · LLMs · RAG · Agentes de IA · MCP",
         "explore": "Explorar cómo funciona",
         "reset": "Restablecer",
         "replay": "Repetir",
-        "cta": "Ver nuestra tecnología",
-        "ctaHref": "/es/technologies/",
         "caption": "VISUALIZACIÓN EN VIVO DE UN TRANSFORMER",
         "dims": "3 capas · 3 cabezas de atención · embeddings de 48 dimensiones",
         "disclaimer": "Un pequeño modelo real de estilo GPT ordenando tokens A/B/C. El modelo es intencionalmente pequeño para poder explorar visualmente su cómputo interno; los LLMs de producción operan a una escala muchísimo mayor.",
         "unavailable": "La visualización interactiva del modelo no está disponible en este navegador. El flujo del transformer se muestra en una vista estática simplificada.",
         "region": "Visualización interactiva de un pequeño transformer de estilo GPT de tres capas que procesa y ordena tokens A, B y C mediante embeddings, self-attention, capas transformer y probabilidades del próximo token.",
         "progress": ["Tokens", "Embeddings", "Q/K/V", "Attention", "Capas", "Output", "Predicción"],
-        "techExplain": [
-            {"t": "Tokens", "d": "Las entradas discretas ingresan al modelo."},
-            {"t": "Embeddings", "d": "Los tokens se convierten en vectores aprendidos más información posicional."},
-            {"t": "Self-attention", "d": "Cada posición pondera el contexto previo relevante mediante Query, Key y Value."},
-            {"t": "Capas transformer", "d": "Las transformaciones de atención y feed-forward se repiten mediante conexiones residuales."},
-            {"t": "Predicción", "d": "La representación final se convierte en probabilidades para el próximo token."},
-        ],
         "stages": {
             "tokens": {"title": "1 · Tokens", "description": "El modelo recibe tokens discretos. Esta demo comienza con C B A B B C."},
         },

@@ -121,7 +121,6 @@ a:hover { text-decoration: underline; }
 }
 .btn:hover { background: #7dd3fc; text-decoration: none; transform: translateY(-1px); }
 .btn-small { padding: 0.45rem 1rem; font-size: 0.9rem; }
-.btn[hidden] { display: none !important; }
 
 /* ---------- Hero ---------- */
 .hero {
@@ -336,30 +335,13 @@ footer {
 }
 
 /* ---------- LLM visualization ---------- */
-.llm-tech-section { margin: 2.75rem 0 1.5rem; }
-.llm-tech-layout {
-  display: grid;
-  grid-template-columns: minmax(0, 0.42fr) minmax(0, 0.58fr);
-  gap: 1.5rem;
-  align-items: start;
-}
-.llm-tech-copy .eyebrow {
-  color: var(--accent);
-  font-size: 0.75rem;
-  letter-spacing: 0.08em;
-  font-weight: 700;
-  margin-bottom: 0.6rem;
-}
-.llm-tech-copy h2 { margin-top: 0; }
-.technology-line { color: var(--muted); font-size: 0.95rem; }
-.llm-viz-explain { margin: 0 0 1rem 1.1rem; color: #cbd5e1; }
-.llm-viz-explain li { margin-bottom: 0.4rem; }
 .llm-viz-shell {
   background: var(--surface);
   border: 1px solid var(--line);
   border-radius: var(--radius);
   overflow: hidden;
   padding: 1rem;
+  margin: 1.25rem 0 1.5rem;
 }
 .llm-viz-caption {
   font-size: 0.72rem;
@@ -386,7 +368,7 @@ footer {
   opacity: 0;
   transition: opacity 250ms ease;
 }
-.llm-tech-section.is-ready .llm-viz-stage canvas { opacity: 1; }
+.llm-viz-shell.is-ready .llm-viz-stage canvas { opacity: 1; }
 .llm-viz-fallback {
   position: absolute;
   inset: 0;
@@ -395,7 +377,7 @@ footer {
   justify-content: center;
   padding: 1rem;
 }
-.llm-tech-section.is-ready:not(.is-fallback) .llm-viz-fallback { opacity: 0; pointer-events: none; transition: opacity 250ms ease; }
+.llm-viz-shell.is-ready:not(.is-fallback) .llm-viz-fallback { opacity: 0; pointer-events: none; transition: opacity 250ms ease; }
 .llm-viz-diagram { width: 100%; height: auto; }
 .llm-viz-dom-overlay {
   position: absolute;
@@ -418,16 +400,16 @@ footer {
 }
 .llm-viz-progress .is-active { color: var(--accent); font-weight: 700; }
 .llm-viz-buttons { display: flex; flex-wrap: wrap; gap: 0.5rem; }
-button.btn {
+.llm-viz-shell button.btn {
   border: 0;
   cursor: pointer;
   font: inherit;
 }
+.llm-viz-shell .btn[hidden] { display: none !important; }
 .llm-viz-disclaimer { color: var(--muted); font-size: 0.82rem; margin: 0.75rem 0 0; max-width: none; }
 @media (max-width: 860px) {
-  .llm-tech-layout { grid-template-columns: 1fr; }
   .llm-viz-stage { height: clamp(360px, 105vw, 500px); }
 }
 @media (prefers-reduced-motion: reduce) {
-  .llm-viz-stage canvas, .llm-tech-section.is-ready:not(.is-fallback) .llm-viz-fallback { transition: none; }
+  .llm-viz-stage canvas, .llm-viz-shell.is-ready:not(.is-fallback) .llm-viz-fallback { transition: none; }
 }
