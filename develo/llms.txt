@@ -1,0 +1,51 @@
+# Develo
+
+> Develo is a software engineering and artificial intelligence company based in
+> Buenos Aires, Argentina. We build custom software, AI agents and automation
+> platforms for customer service, WhatsApp, marketplaces (including Mercado
+> Libre) and digital business operations. We engineer on AWS, run large
+> language models through Amazon Bedrock, build autonomous AI agents with tool
+> access over the Model Context Protocol (MCP), and apply RAG and LLM
+> fine-tuning where they measurably improve quality.
+
+## Company
+
+- About Develo: https://develo.software/about/
+- Contact: https://develo.software/contact/
+- Technology stack (AWS, Amazon Bedrock, AI agents, MCP, LLM fine-tuning): https://develo.software/technologies/
+
+## Solutions
+
+- All solutions: https://develo.software/solutions/
+- Custom software development: https://develo.software/solutions/custom-software-development/
+- Artificial intelligence for business: https://develo.software/solutions/artificial-intelligence/
+- AI agent development: https://develo.software/solutions/ai-agents/
+- Customer service automation: https://develo.software/solutions/customer-service-automation/
+- AI agents for WhatsApp customer service: https://develo.software/solutions/ai-for-whatsapp/
+- Marketplace & ecommerce automation: https://develo.software/solutions/marketplace-automation/
+- AI automation for Mercado Libre sellers: https://develo.software/solutions/ai-for-mercado-libre/
+- API & system integrations: https://develo.software/solutions/api-integrations/
+
+## Products
+
+- d-ialog (conversational AI platform): https://develo.software/solutions/d-ialog/
+- Develo Multi-Agent (agent orchestration platform): https://develo.software/solutions/develomultiagent/
+
+## Industries, proof and knowledge
+
+- Ecommerce & retail: https://develo.software/industries/ecommerce-retail/
+- Case studies: https://develo.software/case-studies/
+- Tecnoland & Distriland case study: https://develo.software/case-studies/tecnoland-distriland/
+- Insights: https://develo.software/insights/
+- AI agents vs traditional chatbots: https://develo.software/insights/ai-agents-vs-chatbots/
+
+## Legal
+
+- Privacy policy: https://develo.software/privacy-policy/
+- Terms & conditions: https://develo.software/terms-and-conditions/
+
+## Contact
+
+- Email: info@develo.ar
+- Phone: +54 11 3209-0851
+- Location: Buenos Aires, Argentina
