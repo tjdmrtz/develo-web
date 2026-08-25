@@ -18,6 +18,3 @@ dist/
 
 # Local deploy artifacts
 .cloudfront/
-
-# Test artifacts
-tests/screenshots/

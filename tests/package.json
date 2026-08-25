@@ -1,8 +1,0 @@
-{
-  "name": "develo-web-tests",
-  "private": true,
-  "description": "Browser test helpers for the Develo website (uses the system Chrome)",
-  "devDependencies": {
-    "puppeteer-core": "^24.0.0"
-  }
-}

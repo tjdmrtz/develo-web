@@ -1,9 +1,6 @@
 #!/usr/bin/env bash
 #
-# Deploy the Develo website (develo/ folder) to S3 + CloudFront.
-#
-# The develo/ directory is the deploy root: its contents are synced to the
-# bucket root so that https://develo.software/ serves develo/index.html.
+# Deploy this static site to S3 + CloudFront.
 #
 # Environment:
 #   REGION           AWS region for the bucket           (default: eu-west-1)
@@ -53,17 +50,15 @@ else
 fi
 
 # --- 2. Sync files ----------------------------------------------------------
-WEBSITE_DIR="develo"
-if [ ! -d "$WEBSITE_DIR" ]; then
-  echo "ERROR: website folder '$WEBSITE_DIR' not found" >&2
-  exit 1
-fi
-echo "Syncing $WEBSITE_DIR/ to s3://$BUCKET_NAME ..."
-aws s3 sync "$WEBSITE_DIR" "s3://$BUCKET_NAME" \
+echo "Syncing to s3://$BUCKET_NAME ..."
+aws s3 sync . "s3://$BUCKET_NAME" \
   --delete \
+  --exclude ".cloudfront/*" \
+  --exclude ".git/*" \
+  --exclude ".github/*" \
+  --exclude "deploy.sh" \
   --exclude "README.md" \
-  --exclude "fix_indentation.md" \
-  --exclude ".DS_Store" \
+  --exclude ".gitignore" \
   --cache-control "max-age=300"
 
 # --- 3. CloudFront distribution ---------------------------------------------
