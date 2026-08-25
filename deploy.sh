@@ -64,27 +64,7 @@ aws s3 sync "$WEBSITE_DIR" "s3://$BUCKET_NAME" \
   --exclude "README.md" \
   --exclude "fix_indentation.md" \
   --exclude ".DS_Store" \
-  --exclude "llm-viz/*" \
   --cache-control "max-age=300"
-
-# Versioned visualization assets: long cache + correct WASM MIME.
-if [ -d "$WEBSITE_DIR/llm-viz" ]; then
-  aws s3 sync "$WEBSITE_DIR/llm-viz" "s3://$BUCKET_NAME/llm-viz" \
-    --exclude "*" \
-    --include "*.json" \
-    --content-type "application/json" \
-    --cache-control "public, max-age=31536000, immutable"
-  aws s3 sync "$WEBSITE_DIR/llm-viz" "s3://$BUCKET_NAME/llm-viz" \
-    --exclude "*" \
-    --include "*.png" \
-    --content-type "image/png" \
-    --cache-control "public, max-age=31536000, immutable"
-  aws s3 sync "$WEBSITE_DIR/llm-viz" "s3://$BUCKET_NAME/llm-viz" \
-    --exclude "*" \
-    --include "*.wasm" \
-    --content-type "application/wasm" \
-    --cache-control "public, max-age=31536000, immutable"
-fi
 
 # --- 3. CloudFront distribution ---------------------------------------------
 # The distribution may already exist from a previous (fresh) workspace: first

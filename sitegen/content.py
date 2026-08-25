@@ -107,7 +107,6 @@ PAGES = [
                 "<strong>RAG and LLM fine-tuning</strong> where it measurably "
                 "improves quality."
             )},
-            {"t": "llm-viz", "variant": "home"},
             {"t": "links", "items": [
                 {"label": "Our Technology Stack", "href": "/technologies/",
                  "note": "AWS, Bedrock, AI agents, MCP and LLM fine-tuning"},
@@ -1019,7 +1018,6 @@ PAGES = [
                 "domain tone, format and task accuracy. Every choice is "
                 "validated with evaluation suites on real business cases."
             )},
-            {"t": "llm-viz", "variant": "tech"},
             {"t": "h2", "text": "Data & search layer"},
             {"t": "p", "html": (
                 "Vector databases and embedding pipelines give our systems "
@@ -1741,7 +1739,6 @@ PAGES = [
                 "(MCP)</strong> y aplicamos <strong>RAG y fine-tuning de "
                 "LLMs</strong> donde mejoran mediblemente la calidad."
             )},
-            {"t": "llm-viz", "variant": "home"},
             {"t": "links", "items": [
                 {"label": "Nuestra Pila Tecnológica", "href": "/technologies/",
                  "note": "AWS, Bedrock, agentes de IA, MCP y fine-tuning"},

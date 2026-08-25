@@ -7,7 +7,6 @@ Usage:  python3 -m sitegen.build
 """
 
 import shutil
-import tempfile
 from pathlib import Path
 
 from . import assets
@@ -17,24 +16,17 @@ from .render import render_page
 REPO_ROOT = Path(__file__).resolve().parent.parent
 SITE_ROOT = REPO_ROOT / "develo"
 
-# Files/dirs under develo/ that the generator does not produce — preserved as-is.
+# Files under develo/ that the generator does not produce — preserved as-is.
 KEEP = ("README.md", "fix_indentation.md")
-PRESERVE_DIRS = ("llm-viz", "js/llm-visualization")
 
 
 def build() -> None:
     kept = {}
-    preserved = {}
     if SITE_ROOT.exists():
         for name in KEEP:
             src = SITE_ROOT / name
             if src.exists():
                 kept[name] = src.read_text(encoding="utf-8")
-        for name in PRESERVE_DIRS:
-            src = SITE_ROOT / name
-            if src.exists():
-                preserved[name] = Path(tempfile.mkdtemp()) / name
-                shutil.copytree(src, preserved[name])
         shutil.rmtree(SITE_ROOT)
     SITE_ROOT.mkdir(parents=True)
 
@@ -54,14 +46,6 @@ def build() -> None:
 
     for name, text in kept.items():
         (SITE_ROOT / name).write_text(text, encoding="utf-8")
-
-    for name, src in preserved.items():
-        dest = SITE_ROOT / name
-        dest.parent.mkdir(parents=True, exist_ok=True)
-        if dest.exists():
-            shutil.rmtree(dest)
-        shutil.copytree(src, dest)
-        shutil.rmtree(src.parent, ignore_errors=True)
 
     print(f"Built {len(PAGES)} pages into {SITE_ROOT}")
 
