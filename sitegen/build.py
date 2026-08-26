@@ -47,6 +47,11 @@ def copy_llm_visualization() -> None:
                 destination.parent.mkdir(parents=True, exist_ok=True)
                 shutil.copy2(asset, destination)
 
+    vendor_src = LLM_VIZ_ROOT / "vendor" / "katex"
+    if vendor_src.exists():
+        vendor_dest = SITE_ROOT / "vendor" / "katex"
+        shutil.copytree(vendor_src, vendor_dest, dirs_exist_ok=True)
+
 
 def build() -> None:
     kept = {}

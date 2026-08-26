@@ -332,13 +332,6 @@ LLM_VIZ = {
         "explore": "Explore how it works",
         "reset": "Reset",
         "replay": "Replay",
-        "caption": "LIVE TRANSFORMER VISUALIZATION",
-        "dims": "3 layers · 3 attention heads · 48-dimensional embeddings",
-        "disclaimer": (
-            "A real tiny GPT-style model sorting A/B/C tokens. The model is "
-            "intentionally small so its internal computation can be explored "
-            "visually; production LLMs operate at vastly larger scale."
-        ),
         "unavailable": (
             "Interactive model visualization is unavailable in this browser. "
             "The transformer flow is shown in a simplified static view."
@@ -348,24 +341,12 @@ LLM_VIZ = {
             "processing and sorting A, B and C tokens through embeddings, "
             "self-attention, transformer layers and next-token probabilities."
         ),
-        "overview_title": "Model overview",
-        "overview_desc": "A real tiny GPT-style model sorting A/B/C tokens.",
-        "progress": ["Tokens", "Embeddings", "Q/K/V", "Attention",
-                     "Layers", "Output", "Prediction"],
+        "progress": ["Input", "Embedding", "Layer Norm", "Self-Attention",
+                     "Projection", "MLP", "Transformer", "Softmax", "Output"],
         "diagram_label": "Simplified transformer flow",
         "diagram_input": "Input tokens",
         "diagram_steps": ["Embedding", "Attention × 3 heads", "Transformer × 3"],
         "diagram_output": "A / B / C probabilities",
-        "explain": [
-            ("Tokens", "Discrete inputs enter the model."),
-            ("Embeddings", "Tokens become learned vectors plus positional information."),
-            ("Self-attention",
-             "Each position weights relevant earlier context through Query, Key and Value."),
-            ("Transformer layers",
-             "Attention and feed-forward transformations repeat through residual paths."),
-            ("Prediction",
-             "The final representation becomes probabilities for the next token."),
-        ],
     },
     "es": {
         "eyebrow": "LA TECNOLOGÍA DETRÁS DE DEVELO",
@@ -381,13 +362,6 @@ LLM_VIZ = {
         "explore": "Explorar cómo funciona",
         "reset": "Restablecer",
         "replay": "Repetir",
-        "caption": "VISUALIZACIÓN EN VIVO DE UN TRANSFORMER",
-        "dims": "3 capas · 3 cabezas de atención · embeddings de 48 dimensiones",
-        "disclaimer": (
-            "Un pequeño modelo real de estilo GPT ordenando tokens A/B/C. El modelo "
-            "es intencionalmente pequeño para poder explorar visualmente su cómputo "
-            "interno; los LLMs de producción operan a una escala muchísimo mayor."
-        ),
         "unavailable": (
             "La visualización interactiva del modelo no está disponible en este "
             "navegador. El flujo del transformer se muestra en una vista estática "
@@ -398,26 +372,12 @@ LLM_VIZ = {
             "tres capas que procesa y ordena tokens A, B y C mediante embeddings, "
             "self-attention, capas transformer y probabilidades del próximo token."
         ),
-        "overview_title": "Vista general del modelo",
-        "overview_desc": "Un pequeño modelo real de estilo GPT ordenando tokens A/B/C.",
-        "progress": ["Tokens", "Embeddings", "Q/K/V", "Attention",
-                     "Capas", "Output", "Predicción"],
+        "progress": ["Entrada", "Embedding", "Layer Norm", "Self-Attention",
+                     "Proyección", "MLP", "Transformer", "Softmax", "Output"],
         "diagram_label": "Flujo simplificado del transformer",
         "diagram_input": "Tokens de entrada",
         "diagram_steps": ["Embedding", "Atención × 3 cabezas", "Transformer × 3"],
         "diagram_output": "Probabilidades A / B / C",
-        "explain": [
-            ("Tokens", "Las entradas discretas ingresan al modelo."),
-            ("Embeddings",
-             "Los tokens se convierten en vectores aprendidos más información posicional."),
-            ("Self-attention",
-             "Cada posición pondera el contexto previo relevante mediante Query, Key y Value."),
-            ("Capas transformer",
-             "Las transformaciones de atención y feed-forward se repiten mediante "
-             "conexiones residuales."),
-            ("Predicción",
-             "La representación final se convierte en probabilidades para el próximo token."),
-        ],
     },
 }
 
@@ -436,14 +396,6 @@ def render_llm_viz(page: dict, block: dict) -> str:
     copy = LLM_VIZ[lang]
     variant = block.get("variant", "home")
 
-    explain = ""
-    if variant == "tech":
-        items = "".join(
-            f"<li><strong>{display_text(title)}</strong> {display_text(body)}</li>"
-            for title, body in copy["explain"]
-        )
-        explain = f'<ul class="llm-tech-explain">{items}</ul>'
-
     input_cells = "".join(f"<span>{tok}</span>" for tok in LLM_VIZ_INPUT_TOKENS)
     output_cells = "".join(f"<span>{tok}</span>" for tok in LLM_VIZ_OUTPUT_TOKENS)
     steps = "".join(f"<li>{display_text(step)}</li>" for step in copy["diagram_steps"])
@@ -459,36 +411,31 @@ def render_llm_viz(page: dict, block: dict) -> str:
         <h2 id="llm-tech-title">{display_text(copy["title"])}</h2>
         <p>{display_text(copy["body"])}</p>
         <p class="llm-tech-stack">{display_text(copy["stack"])}</p>
-        {explain}
         <a class="btn btn-small" href="{copy["cta_href"]}">{display_text(copy["cta"])}</a>
       </div>
       <div class="llm-viz-shell">
-        <div class="llm-viz-meta">
-          <p class="llm-viz-caption">{display_text(copy["caption"])}</p>
-          <p class="llm-viz-dims">{display_text(copy["dims"])}</p>
-        </div>
-        <div class="llm-viz-stage" role="region" aria-label="{esc(copy["region"])}">
-          <div class="llm-viz-fallback" data-llm-fallback>
-            <p class="llm-viz-fallback-msg" data-llm-fallback-msg hidden>{display_text(copy["unavailable"])}</p>
-            <ol class="llm-viz-diagram" aria-label="{esc(copy["diagram_label"])}">
-              <li class="llm-viz-diagram-tokens">
-                <span class="llm-viz-diagram-label">{display_text(copy["diagram_input"])}</span>
-                <span class="llm-viz-cells">{input_cells}</span>
-              </li>
-              {steps}
-              <li class="llm-viz-diagram-tokens">
-                <span class="llm-viz-diagram-label">{display_text(copy["diagram_output"])}</span>
-                <span class="llm-viz-cells">{output_cells}</span>
-              </li>
-            </ol>
+        <div class="llm-viz-experience">
+          <div class="llm-viz-stage" role="region" aria-label="{esc(copy["region"])}">
+            <div class="llm-viz-fallback" data-llm-fallback>
+              <p class="llm-viz-fallback-msg" data-llm-fallback-msg hidden>{display_text(copy["unavailable"])}</p>
+              <ol class="llm-viz-diagram" aria-label="{esc(copy["diagram_label"])}">
+                <li class="llm-viz-diagram-tokens">
+                  <span class="llm-viz-diagram-label">{display_text(copy["diagram_input"])}</span>
+                  <span class="llm-viz-cells">{input_cells}</span>
+                </li>
+                {steps}
+                <li class="llm-viz-diagram-tokens">
+                  <span class="llm-viz-diagram-label">{display_text(copy["diagram_output"])}</span>
+                  <span class="llm-viz-cells">{output_cells}</span>
+                </li>
+              </ol>
+            </div>
+            <canvas data-llm-canvas aria-hidden="true"></canvas>
           </div>
-          <canvas data-llm-canvas aria-hidden="true"></canvas>
-          <div class="llm-viz-overlay">
-            <p class="llm-viz-stage-title" data-llm-stage-title>{display_text(copy["overview_title"])}</p>
-            <p class="llm-viz-stage-desc" data-llm-stage-desc>{display_text(copy["overview_desc"])}</p>
-            <p class="llm-viz-probs" data-llm-probs></p>
-            <p class="llm-viz-hint" data-llm-hint hidden></p>
-          </div>
+          <aside class="llm-viz-math" aria-live="polite" aria-atomic="true">
+            <div class="llm-viz-equation" data-llm-equation></div>
+            <div class="llm-viz-math-values" data-llm-math-values hidden></div>
+          </aside>
         </div>
         <div class="llm-viz-controls">
           <ol class="llm-viz-progress" aria-hidden="true">{progress}</ol>
@@ -497,8 +444,8 @@ def render_llm_viz(page: dict, block: dict) -> str:
             <button type="button" class="btn btn-small" data-llm-reset hidden>{display_text(copy["reset"])}</button>
             <button type="button" class="btn btn-small" data-llm-replay hidden>{display_text(copy["replay"])}</button>
           </div>
+          <span class="llm-viz-hint" data-llm-hint hidden></span>
         </div>
-        <p class="llm-viz-disclaimer">{display_text(copy["disclaimer"])}</p>
       </div>
     </div>
 """
@@ -728,12 +675,16 @@ def render_page(page: dict) -> str:
         '\n  <script type="module" src="/js/llm-visualization/index.js"></script>'
         if has_llm_viz else ""
     )
+    llm_viz_style = (
+        '\n  <link rel="stylesheet" href="/vendor/katex/katex.min.css">'
+        if has_llm_viz else ""
+    )
     spatial_hero = build_spatial_hero() if home else ""
     body_class = "home-page" if home else "inner-page"
     rendered = f"""<!DOCTYPE html>
 <html lang="{lang}">
 <head>
-  {build_head(page)}
+  {build_head(page)}{llm_viz_style}
   {build_schemas(page)}
 </head>
 <body class="{body_class}">

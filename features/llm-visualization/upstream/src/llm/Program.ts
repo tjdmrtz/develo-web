@@ -4,8 +4,8 @@
 import { genModelViewMatrices, ICamera, updateCamera } from "./Camera";
 import { drawAllArrows } from "./components/Arrow";
 import { drawBlockLabels } from "./components/SectionLabels";
-import { drawModelCard } from "./components/ModelCard";
 import { drawTokens } from "./components/Tokens";
+import { createDeveloWalkthrough, IDeveloWalkthrough, runDeveloWalkthrough } from "./walkthrough-develo/DeveloWalkthrough";
 import { IGptModelLink, IGpuGptModel, IModelShape } from "./GptModel";
 import { genGptModelLayout, IBlkDef, IGptModelLayout } from "./GptModelLayout";
 import { IFontAtlasData } from "./render/fontRender";
@@ -51,7 +51,7 @@ export interface IProgramState {
     mouse: IMouseState;
     render: IRenderState;
     inWalkthrough: boolean;
-    walkthrough: { markDirty: () => void; running: boolean; time: number; phaseLength: number };
+    walkthrough: IDeveloWalkthrough;
     camera: ICamera;
     htmlSubs: Subscriptions;
     layout: IGptModelLayout;
@@ -129,12 +129,14 @@ export function initProgramState(canvasEl: HTMLCanvasElement, fontAtlasData: IFo
 
     let shape = { ...NANO_SHAPE };
 
-    return {
+    let walkthrough = createDeveloWalkthrough(() => {});
+
+    let state: IProgramState = {
         native: null,
         wasmGptModel: null,
         render: render!,
         inWalkthrough: false,
-        walkthrough: { markDirty: () => {}, running: false, time: 0, phaseLength: 0 },
+        walkthrough,
         camera,
         shape,
         layout: genGptModelLayout(shape),
@@ -187,76 +189,8 @@ export function initProgramState(canvasEl: HTMLCanvasElement, fontAtlasData: IFo
         inputLength: 6,
         generatedLength: 0,
     };
-}
-
-function setCubes(cubes: IBlkDef[] | undefined, opacity: number, highlight: number) {
-    if (!cubes) return;
-    for (let c of cubes) {
-        if (c.opacity === 0 && highlight === 0) continue;
-        c.opacity = opacity;
-        c.highlight = highlight;
-    }
-}
-
-export function applyDeveloStage(state: IProgramState) {
-    let layout = state.layout;
-    if (!layout) return;
-
-    let p = state.stageProgress;
-    let stage = state.stage;
-
-    for (let c of layout.cubes) {
-        c.opacity = 0.28;
-        c.highlight = 0;
-    }
-
-    state.display.tokenIdxModelOpacity = [1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0];
-
-    function raise(cubes: IBlkDef[] | undefined, hl = 0.65) {
-        if (!cubes) return;
-        for (let c of cubes) {
-            if (!c) continue;
-            c.opacity = 1;
-            c.highlight = hl;
-        }
-    }
-
-    if (stage === "tokens") {
-        raise([layout.idxObj], 0.9);
-        layout.idxObj.opacity = 1;
-    } else if (stage === "embedding") {
-        raise([layout.tokEmbedObj, layout.posEmbedObj, layout.residual0], 0.7);
-    } else if (stage === "qkv") {
-        let block = layout.blocks[0];
-        let headCount = p < 0.55 ? 1 : 3;
-        if (block && block.heads) {
-            for (let i = 0; i < Math.min(headCount, block.heads.length); i++) {
-                let h = block.heads[i];
-                raise([h.qBlock, h.kBlock, h.vBlock, h.qWeightBlock, h.kWeightBlock, h.vWeightBlock], i === 0 ? 0.85 : 0.55);
-            }
-        }
-    } else if (stage === "attention") {
-        let block = layout.blocks[0];
-        if (block && block.heads) {
-            for (let h of block.heads) {
-                raise([h.attnMtx, h.attnMtxSm, h.attnMtxAgg1, h.attnMtxAgg2, h.vOutBlock], 0.9);
-            }
-        }
-    } else if (stage === "transformer") {
-        for (let b of layout.blocks) {
-            raise(b.cubes, 0.45);
-            raise([b.attnResidual, b.mlpResidual].filter(Boolean) as IBlkDef[], 0.7);
-        }
-    } else if (stage === "output") {
-        raise([layout.ln_f.lnResid, layout.lmHeadWeight, layout.logits, layout.logitsSoftmax].filter(Boolean) as IBlkDef[], 0.85);
-    } else if (stage === "prediction") {
-        raise([layout.logitsSoftmax, layout.idxObj].filter(Boolean) as IBlkDef[], 0.8);
-    } else {
-        for (let c of layout.cubes) {
-            c.opacity = 1;
-            c.highlight = 0;
-        }
-    }
+    walkthrough.markDirty = () => state.markDirty();
+    return state;
 }
 
 export function runProgram(view: IRenderView, state: IProgramState) {
@@ -284,7 +218,7 @@ export function runProgram(view: IRenderView, state: IProgramState) {
     }
 
     state.layout = genGptModelLayout(state.shape, state.jsGptModel);
-    applyDeveloStage(state);
+    runDeveloWalkthrough(view, state);
 
     genModelViewMatrices(state, state.layout!);
 
@@ -298,7 +232,6 @@ export function runProgram(view: IRenderView, state: IProgramState) {
     updateCamera(state, view);
 
     drawAllArrows(state.render, state.layout);
-    drawModelCard(state, state.layout, 'nano-gpt', new Vec3());
     drawTokens(state.render, state.layout, state.display, undefined, 6);
 
     state.render.sharedRender.activePhase = RenderPhase.Opaque;

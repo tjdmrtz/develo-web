@@ -1041,6 +1041,11 @@ function updateCamera(state, view) {
 function lerp(a, b, t) {
   return a + (b - a) * clamp(t, 0, 1);
 }
+function lerpSmoothstep(a, b, t) {
+  if (t <= 0) return a;
+  if (t >= 1) return b;
+  return a + (b - a) * t * t * (3 - 2 * t);
+}
 function roundUpTo(a, b) {
   return Math.ceil(a / b) * b;
 }
@@ -2612,6 +2617,24 @@ function drawSectionLabel(state, text, tl, br, opts) {
 }
 
 // features/llm-visualization/upstream/src/llm/walkthrough/WalkthroughTools.ts
+var DimStyle = /* @__PURE__ */ ((DimStyle2) => {
+  DimStyle2[DimStyle2["None"] = 0] = "None";
+  DimStyle2[DimStyle2["t"] = 1] = "t";
+  DimStyle2[DimStyle2["T"] = 2] = "T";
+  DimStyle2[DimStyle2["C"] = 3] = "C";
+  DimStyle2[DimStyle2["B"] = 4] = "B";
+  DimStyle2[DimStyle2["A"] = 5] = "A";
+  DimStyle2[DimStyle2["n_vocab"] = 6] = "n_vocab";
+  DimStyle2[DimStyle2["n_heads"] = 7] = "n_heads";
+  DimStyle2[DimStyle2["n_layers"] = 8] = "n_layers";
+  DimStyle2[DimStyle2["Token"] = 9] = "Token";
+  DimStyle2[DimStyle2["TokenIdx"] = 10] = "TokenIdx";
+  DimStyle2[DimStyle2["C4"] = 11] = "C4";
+  DimStyle2[DimStyle2["Intermediates"] = 12] = "Intermediates";
+  DimStyle2[DimStyle2["Weights"] = 13] = "Weights";
+  DimStyle2[DimStyle2["Aggregates"] = 14] = "Aggregates";
+  return DimStyle2;
+})(DimStyle || {});
 function dimStyleColor(style) {
   switch (style) {
     case 1 /* t */:
@@ -2637,6 +2660,22 @@ function dimStyleColor(style) {
   }
   return DEVELO_LLM_VIZ_THEME.text;
 }
+function dimStyleTextShort(style) {
+  switch (style) {
+    case 4 /* B */:
+      return "b";
+    case 2 /* T */:
+      return "t";
+    case 5 /* A */:
+      return "a";
+    case 3 /* C */:
+      return "c";
+    case 11 /* C4 */:
+      return "c";
+    default:
+      return DimStyle[style];
+  }
+}
 var Colors = {
   Weights: DEVELO_LLM_VIZ_THEME.embedding,
   Intermediates: DEVELO_LLM_VIZ_THEME.mlp,
@@ -2644,6 +2683,12 @@ var Colors = {
 };
 
 // features/llm-visualization/upstream/src/llm/Annotations.ts
+var dimConstX = { vecId: 0, xName: "x", dxName: "dx", cxName: "cx", offXName: "offX", sizeXName: "sizeX" };
+var dimConstY = { vecId: 1, xName: "y", dxName: "dy", cxName: "cy", offXName: "offY", sizeXName: "sizeY" };
+var dimConstZ = { vecId: 2, xName: "z", dxName: "dz", cxName: "cz", offXName: "offZ", sizeXName: "sizeZ" };
+function dimConsts(dim) {
+  return dim === 0 /* X */ ? dimConstX : dim === 1 /* Y */ ? dimConstY : dimConstZ;
+}
 function dimProps(blk, dim) {
   switch (dim) {
     case 0 /* X */:
@@ -2653,6 +2698,135 @@ function dimProps(blk, dim) {
     case 2 /* Z */:
       return { x: blk.z, cx: blk.cz, dx: blk.dz, rangeOffsets: blk.rangeOffsetsZ, offX: blk.offZ ?? 0, sizeX: blk.sizeZ ?? blk.cz };
   }
+}
+function duplicateGrid(layout, blk) {
+  let newBlk = { ...blk, access: blk.access ? { ...blk.access } : void 0 };
+  newBlk.name = "";
+  layout.cubes.push(newBlk);
+  return newBlk;
+}
+function splitGridForHighlight(layout, blk, dim, xSplit) {
+  let { x, cx, rangeOffsets } = dimProps(blk, dim);
+  if (cx <= 1) {
+    return blk;
+  }
+  if (rangeOffsets && blk.subs) {
+    for (let s of blk.subs) {
+      let res = splitGrid(layout, s, dim, xSplit, 0);
+      if (res) {
+        return res;
+      }
+    }
+  }
+  return splitGrid(layout, blk, dim, xSplit, 0);
+}
+function splitGrid(layout, blk, dim, xSplit, splitAmt) {
+  let { offX, sizeX } = dimProps(blk, dim);
+  let blocks = [];
+  let rangeOffsets = [];
+  let colX = Math.floor(xSplit) - offX;
+  if (colX < 0 || colX >= sizeX) {
+    return null;
+  }
+  if (sizeX <= 1) {
+    return blk;
+  }
+  function addSubBlockLocal(iStart, iEnd, xOffset) {
+    let res = addSubBlock(layout, blk, dim, iStart, iEnd, xOffset);
+    if (res) {
+      blocks.push(res.subBlock);
+      rangeOffsets.push(res.rangeOffset);
+    }
+    return res?.subBlock ?? null;
+  }
+  let midBlock;
+  if (splitAmt === 0) {
+    addSubBlockLocal(0, colX, 0);
+    midBlock = addSubBlockLocal(colX, colX + 1, 0);
+    addSubBlockLocal(colX + 1, sizeX, 0);
+  } else {
+    let scale = 0.5;
+    let fract = (xSplit - colX - 0.5) * scale + 0.5;
+    let addMidBlockBefore = fract + scale < 1;
+    let addMidBlockAfter = fract - scale > 0;
+    let offset = lerpSmoothstep(-splitAmt, 0, (xSplit - 0.5) * scale + 0.5);
+    addSubBlockLocal(0, colX - (addMidBlockBefore ? 1 : 0), offset + 0);
+    if (addMidBlockBefore) {
+      addSubBlockLocal(colX - 1, colX, offset + lerpSmoothstep(splitAmt, 0, fract + scale));
+    }
+    midBlock = addSubBlockLocal(colX, colX + 1, offset + lerpSmoothstep(splitAmt, 0, fract));
+    if (addMidBlockAfter) {
+      addSubBlockLocal(colX + 1, colX + 2, offset + lerpSmoothstep(splitAmt, 0, fract - scale));
+    }
+    addSubBlockLocal(colX + (addMidBlockAfter ? 2 : 1), sizeX, offset + splitAmt);
+  }
+  if (blocks.length > 0) {
+    if (dim === 0 /* X */) blk.rangeOffsetsX = rangeOffsets;
+    if (dim === 1 /* Y */) blk.rangeOffsetsY = rangeOffsets;
+    if (dim === 2 /* Z */) blk.rangeOffsetsZ = rangeOffsets;
+    blk.subs = blocks;
+    return midBlock;
+  } else {
+    return null;
+  }
+}
+function addSubBlock(layout, blk, dim, iStart, iEnd, xOffset) {
+  let { x, cx, sizeX, offX } = dimProps(blk, dim);
+  let { vecId, xName, dxName, offXName, sizeXName } = dimConsts(dim);
+  if (iStart >= iEnd || iEnd <= 0 || iStart >= sizeX) {
+    return null;
+  }
+  let scale = (iEnd - iStart) / sizeX;
+  let translate = iStart / sizeX;
+  let mtx = Mat4f.fromScaleTranslation(new Vec3(1, 1, 1).setAt(vecId, scale), new Vec3().setAt(vecId, translate));
+  let subBlock = {
+    ...blk,
+    [dxName]: (iEnd - iStart) * layout.cell,
+    // [cxName]: iEnd - iStart,
+    access: blk.access && { ...blk.access },
+    localMtx: (blk.localMtx ?? new Mat4f()).mul(mtx),
+    [xName]: x + (iStart * layout.cell + xOffset),
+    [offXName]: iStart + offX,
+    [sizeXName]: iEnd - iStart
+  };
+  return { subBlock, rangeOffset: [iEnd, xOffset] };
+}
+function splitGridAll(layout, blk, dim) {
+  let { dx } = dimProps(blk, dim);
+  let nCells = Math.ceil(dx / layout.cell);
+  let blocks = [];
+  let rangeOffsets = [];
+  for (let i = 0; i < nCells; i += 1) {
+    let res = addSubBlock(layout, blk, dim, i, i + 1, 0);
+    blocks.push(res.subBlock);
+    rangeOffsets.push(res.rangeOffset);
+  }
+  if (dim === 0 /* X */) blk.rangeOffsetsX = rangeOffsets;
+  if (dim === 1 /* Y */) blk.rangeOffsetsY = rangeOffsets;
+  if (dim === 2 /* Z */) blk.rangeOffsetsZ = rangeOffsets;
+  blk.subs = blocks;
+  return blocks;
+}
+function findSubBlocks(blk, dim, idxLow, idxHi) {
+  if (!blk.subs) {
+    return [];
+  }
+  let offsets = dim === 0 /* X */ ? blk.rangeOffsetsX : dim === 1 /* Y */ ? blk.rangeOffsetsY : blk.rangeOffsetsZ;
+  idxLow = idxLow === null ? null : Math.floor(idxLow);
+  idxHi = idxHi === null ? null : Math.floor(idxHi);
+  let subBlocks = [];
+  let startIdx = 0;
+  for (let i = 0; i < blk.subs.length; i += 1) {
+    let endIdx = offsets?.[i]?.[0];
+    if (isNil(endIdx)) {
+      break;
+    }
+    if ((idxLow === null || idxLow < endIdx) && (idxHi === null || idxHi >= startIdx)) {
+      subBlocks.push(blk.subs[i]);
+    }
+    startIdx = endIdx;
+  }
+  return subBlocks;
 }
 
 // features/llm-visualization/upstream/src/llm/GptModelLayout.ts
@@ -2676,6 +2850,18 @@ function depArgsToDeps(args) {
     special: args.special ?? 0 /* None */,
     lowerTri: args.lowerTri
   };
+}
+function getBlkDimensions(blk) {
+  let { x, y, z, dx, dy, dz } = blk;
+  return {
+    tl: new Vec3(x, y, z),
+    br: new Vec3(x + dx, y + dy, z + dz)
+  };
+}
+function setBlkPosition(blk, pos) {
+  blk.x = pos.x;
+  blk.y = pos.y;
+  blk.z = pos.z;
 }
 function cellPosition(layout, blk, dim, index) {
   let { x, rangeOffsets } = dimProps(blk, dim);
@@ -3634,246 +3820,6 @@ function genGptModelLayout(shape, gptGpuModel = null, offset = new Vec3(0, 0, 0)
   };
 }
 
-// features/llm-visualization/upstream/src/llm/components/ModelCard.ts
-function withAlpha(color, alpha) {
-  return new Vec4(color.x, color.y, color.z, alpha);
-}
-function lineHeight(fontOpts) {
-  return fontOpts.size * 1.2;
-}
-function drawModelCard(state, layout, title, offset) {
-  let { render } = state;
-  let { camPos } = cameraToMatrixView(state.camera);
-  let dist = camPos.dist(new Vec3(0, 0, -30));
-  let scale = clamp(dist / 500, 1, 800);
-  let pinY = -60;
-  let mtx = Mat4f.fromScaleTranslation(new Vec3(scale, scale, scale), new Vec3(0, pinY, 0).add(offset)).mul(Mat4f.fromTranslation(new Vec3(0, -pinY, 0)));
-  let thick = 1 / 10 * scale;
-  let borderColor = withAlpha(DEVELO_LLM_VIZ_THEME.border, 0.8);
-  let backgroundColor = withAlpha(DEVELO_LLM_VIZ_THEME.panel, 0.55);
-  let titleColor = DEVELO_LLM_VIZ_THEME.text;
-  let n = new Vec3(0, 0, 1);
-  let lineOpts = { color: borderColor, mtx, thick, n };
-  let tl = new Vec3(-45, -97, 0);
-  let br = new Vec3(45, -70, 0);
-  drawLineRect(render, tl, br, lineOpts);
-  addQuad(render.triRender, new Vec3(tl.x, tl.y, -0.1), new Vec3(br.x, br.y, -0.1), backgroundColor, mtx);
-  let { B, C, T, A, nBlocks, nHeads, vocabSize } = layout.shape;
-  let midX = (tl.x + br.x) / 2;
-  let paramLeft = br.x - 50;
-  let paramOff = tl.y + 2;
-  let paramLineHeight = 1.3;
-  let paramFontScale = 4;
-  let numWidth = paramFontScale * 0.6;
-  let allNums = [B, C, T, A, nBlocks, nHeads];
-  let maxLen = Math.max(...allNums.map((n2) => n2.toString().length));
-  let paramHeight = 2 + paramLineHeight * paramFontScale * 3 + 1;
-  let titleFontScale = 13;
-  let titleW = measureTextWidth(render.modelFontBuf, title, titleFontScale);
-  let titleHeight = titleFontScale * paramLineHeight;
-  writeTextToBuffer(render.modelFontBuf, title, titleColor, midX - titleW / 2, tl.y + 2, titleFontScale, mtx);
-  let nParamsText = `n_params = `;
-  let weightCountText = numberToCommaSep(layout.weightCount);
-  let weightSize = 8;
-  let weightTitleW = measureTextWidth(render.modelFontBuf, nParamsText, paramFontScale);
-  let weightCountW = measureTextWidth(render.modelFontBuf, weightCountText, weightSize);
-  paramOff = tl.y + titleHeight + 4;
-  let weightX = midX - (weightCountW + weightTitleW) / 2;
-  writeTextToBuffer(render.modelFontBuf, nParamsText, titleColor, weightX, paramOff - paramFontScale / 2, paramFontScale, mtx);
-  writeTextToBuffer(render.modelFontBuf, weightCountText, titleColor, weightX + weightTitleW, paramOff - weightSize / 2, weightSize, mtx);
-  renderOutputAtBottom(state);
-  renderInputAtTop(state);
-}
-function sortABCInputTokenToString(a) {
-  return String.fromCharCode("A".charCodeAt(0) + a);
-}
-function renderInputBoxes(state, layout, tl, br, cellW, fontSize, lineOpts, opts) {
-  let render = state.render;
-  let { T } = layout.shape;
-  let inCellH = br.y - tl.y;
-  let tokTextOpts = { color: DEVELO_LLM_VIZ_THEME.text, mtx: lineOpts.mtx, size: fontSize };
-  let idxTextOpts = { color: DEVELO_LLM_VIZ_THEME.muted, mtx: lineOpts.mtx, size: fontSize * 0.6 };
-  let dimmedTokTextOpts = { ...tokTextOpts, color: tokTextOpts.color.mul(0.3) };
-  let dimmedIdxTextOpts = { ...idxTextOpts, color: idxTextOpts.color.mul(0.3) };
-  drawLineRect(render, tl, br, lineOpts);
-  let tokens = layout.model?.inputTokens.localBuffer;
-  for (let i = 0; i < T; i++) {
-    if (i > 0) {
-      let lineX = tl.x + i * cellW;
-      addLine2(render.lineRender, new Vec3(lineX, tl.y, 0), new Vec3(lineX, br.y, 0), lineOpts);
-    }
-    if (tokens && i < layout.model.inputLen) {
-      let cx = tl.x + (i + 0.5) * cellW;
-      let tokOpts = { ...tokTextOpts, color: mixColorValues(opts?.tokMixes ?? null, tokTextOpts.color, i) };
-      let tokIdxOpts = { ...idxTextOpts, color: mixColorValues(opts?.idxMixes ?? null, idxTextOpts.color, i) };
-      let tokStr = sortABCInputTokenToString(tokens[i]);
-      let tokW = measureText(render.modelFontBuf, tokStr, tokTextOpts);
-      let idxW = measureText(render.modelFontBuf, tokens[i].toString(), idxTextOpts);
-      let totalH = tokTextOpts.size + idxTextOpts.size;
-      let top = tl.y + (inCellH - totalH) / 2;
-      drawText(render.modelFontBuf, tokStr, cx - tokW / 2, top, tokOpts);
-      drawText(render.modelFontBuf, tokens[i].toString(), cx - idxW / 2, top + tokTextOpts.size, tokIdxOpts);
-    }
-  }
-}
-function renderOutputBoxes(state, layout, tl, br, cellW, fontSize, lineOpts, opts) {
-  let render = state.render;
-  let { T, vocabSize } = layout.shape;
-  let outCellH = br.y - tl.y;
-  let opacity = opts?.opacity ?? 1;
-  let boldLast = opts?.boldLast ?? true;
-  lineOpts = { ...lineOpts, color: lineOpts.color.mul(opacity ?? 1) };
-  let tokTextOpts = { color: withAlpha(DEVELO_LLM_VIZ_THEME.text, opacity), mtx: lineOpts.mtx, size: fontSize };
-  let idxTextOpts = { color: withAlpha(DEVELO_LLM_VIZ_THEME.muted, opacity), mtx: lineOpts.mtx, size: fontSize * 0.6 };
-  let dimmedTokTextOpts = { ...tokTextOpts, color: tokTextOpts.color.mul(0.3) };
-  let dimmedIdxTextOpts = { ...idxTextOpts, color: idxTextOpts.color.mul(0.3) };
-  drawLineRect(render, tl, br, lineOpts);
-  let sortedOutput = layout.model?.sortedBuf;
-  for (let i = 0; i < T; i++) {
-    if (i > 0) {
-      let lineX = tl.x + i * cellW;
-      addLine2(render.lineRender, new Vec3(lineX, tl.y, 0), new Vec3(lineX, br.y, 0), lineOpts);
-    }
-    if (sortedOutput && i < layout.model.inputLen) {
-      let usedSoFar = 0;
-      let cx = tl.x + (i + 0.5) * cellW;
-      for (let j = 0; j < vocabSize; j++) {
-        let tokIdx = sortedOutput[(i * vocabSize + j) * 2 + 0];
-        let tokProb = sortedOutput[(i * vocabSize + j) * 2 + 1];
-        let partTop = tl.y + usedSoFar * outCellH;
-        let partH = tokProb * outCellH;
-        let dimmed = i < layout.model.inputLen - 1 || !boldLast;
-        let color = mixColorValues(opts?.tokMixes ?? null, tokTextOpts.color, i);
-        if (dimmed) {
-          color = color.mul(0.3);
-        }
-        let tokOpts = { ...tokTextOpts, color };
-        let idxOpts = { ...idxTextOpts, color: color.mul(0.6) };
-        let tokStr = sortABCInputTokenToString(tokIdx);
-        let tokW = measureText(render.modelFontBuf, tokStr, tokOpts);
-        let idxW = measureText(render.modelFontBuf, tokIdx.toString(), idxOpts);
-        let textH = tokOpts.size + idxOpts.size;
-        let top = partTop + (partH - textH) / 2;
-        if (partH > textH) {
-          drawText(render.modelFontBuf, tokStr, cx - tokW / 2, top, tokOpts);
-          drawText(render.modelFontBuf, tokIdx.toString(), cx - idxW / 2, top + tokOpts.size, idxOpts);
-        }
-        usedSoFar += tokProb;
-        addLine2(render.lineRender, new Vec3(cx - cellW / 2, partTop + partH, 0), new Vec3(cx + cellW / 2, partTop + partH, 0), lineOpts);
-        if (usedSoFar >= 1 - 1e-4) {
-          break;
-        }
-      }
-    }
-  }
-}
-function mixColorValues(mixes, baseColor, idx) {
-  if (!mixes) {
-    return baseColor;
-  }
-  let mix = mixes.mixes[idx] ?? 0;
-  return Vec4.lerp(mixes.color1 ?? baseColor, mixes.color2, mix);
-}
-var _lineRectArr = new Float32Array(3 * 4);
-function drawLineRect(render, tl, br, opts) {
-  _lineRectArr[0] = tl.x;
-  _lineRectArr[1] = tl.y;
-  _lineRectArr[2] = 0;
-  _lineRectArr[3] = br.x;
-  _lineRectArr[4] = tl.y;
-  _lineRectArr[5] = 0;
-  _lineRectArr[6] = br.x;
-  _lineRectArr[7] = br.y;
-  _lineRectArr[8] = 0;
-  _lineRectArr[9] = tl.x;
-  _lineRectArr[10] = br.y;
-  _lineRectArr[11] = 0;
-  drawLineSegs(render.lineRender, _lineRectArr, makeLineOpts({ ...opts, closed: true }));
-}
-function numberToCommaSep(a) {
-  let s = a.toString();
-  let out = "";
-  for (let i = 0; i < s.length; i++) {
-    if (i > 0 && (s.length - i) % 3 == 0) {
-      out += ",";
-    }
-    out += s[i];
-  }
-  return out;
-}
-function renderInputAtTop(state) {
-  let layout = state.layout;
-  let render = state.render;
-  let inputTokBlk = layout.idxObj;
-  let topMid = new Vec3(inputTokBlk.x + inputTokBlk.dx / 2, inputTokBlk.y - layout.margin);
-  let inCellH = 10;
-  let inCellW = 6;
-  let nCells = layout.shape.T;
-  let tl = new Vec3(topMid.x - inCellW * nCells / 2, topMid.y - inCellH);
-  let br = new Vec3(topMid.x + inCellW * nCells / 2, topMid.y);
-  let outputOpacity = state.display.topOutputOpacity ?? 1;
-  let lineOpts = makeLineOpts({ color: withAlpha(DEVELO_LLM_VIZ_THEME.border, 0.6), mtx: new Mat4f(), thick: 1.5 });
-  let titleTextOpts = { color: DEVELO_LLM_VIZ_THEME.muted, mtx: lineOpts.mtx, size: 1.9 };
-  renderInputBoxes(state, layout, tl, br, inCellW, 4, lineOpts, { tokMixes: state.display.tokenColors, idxMixes: state.display.tokenIdxColors });
-  let inputTitle = "Input";
-  drawText(render.modelFontBuf, inputTitle, tl.x, tl.y - lineHeight(titleTextOpts), titleTextOpts);
-  {
-    let outCellH = 12;
-    let outBr = new Vec3(br.x, tl.y - 4);
-    let outTl = new Vec3(tl.x, outBr.y - outCellH);
-    renderOutputBoxes(state, layout, outTl, outBr, inCellW, 4, lineOpts, { opacity: outputOpacity, boldLast: outputOpacity < 1, tokMixes: state.display.tokenOutputColors });
-    let outputTitle = "Output";
-    let outputTextOpts = { ...titleTextOpts, color: titleTextOpts.color.mul(outputOpacity) };
-    drawText(render.modelFontBuf, outputTitle, outTl.x, outTl.y - lineHeight(titleTextOpts), outputTextOpts);
-  }
-  for (let i = 0; i < nCells; i++) {
-    let mixes = state.display.tokenIdxColors;
-    let lineOptsLocal = { ...lineOpts, color: mixColorValues(mixes, lineOpts.color, i) };
-    let tx = tl.x + (i + 0.5) * inCellW;
-    let ty = tl.y + layout.cell + inCellH;
-    let bx = cellPosition(layout, inputTokBlk, 0 /* X */, i) + 0.5 * layout.cell;
-    let by = inputTokBlk.y - 0.5 * layout.cell;
-    let midY1 = lerp(by, ty, 1 / 6);
-    let midY2 = lerp(by, ty, 3 / 4);
-    addLine2(state.render.lineRender, new Vec3(bx, by), new Vec3(bx, midY1), lineOptsLocal);
-    addLine2(state.render.lineRender, new Vec3(bx, midY1), new Vec3(tx, midY2), lineOptsLocal);
-    addLine2(state.render.lineRender, new Vec3(tx, midY2), new Vec3(tx, ty), lineOptsLocal);
-    let arrLen = 0.6;
-    let arrowLeft = new Vec3(bx - arrLen, by - arrLen);
-    let arrowRight = new Vec3(bx + arrLen, by - arrLen);
-    addLine2(state.render.lineRender, arrowLeft, new Vec3(bx, by), lineOptsLocal);
-    addLine2(state.render.lineRender, arrowRight, new Vec3(bx, by), lineOptsLocal);
-  }
-}
-function renderOutputAtBottom(state) {
-  let layout = state.layout;
-  let softmax = layout.logitsSoftmax;
-  let topMid = new Vec3(softmax.x + softmax.dx / 2, softmax.y + softmax.dy + layout.margin);
-  let outCellH = 10;
-  let outCellW = 6;
-  let nCells = layout.shape.T;
-  let tl = new Vec3(topMid.x - outCellW * nCells / 2, topMid.y);
-  let br = new Vec3(topMid.x + outCellW * nCells / 2, topMid.y + outCellH);
-  let lineOpts = makeLineOpts({ color: withAlpha(DEVELO_LLM_VIZ_THEME.border, 0.6), mtx: new Mat4f(), thick: 1.5 });
-  renderOutputBoxes(state, layout, tl, br, outCellW, 4, lineOpts, { boldLast: true, tokMixes: state.display.tokenOutputColors });
-  for (let i = 0; i < nCells; i++) {
-    let tx = cellPosition(layout, softmax, 0 /* X */, i) + 0.5 * layout.cell;
-    let ty = softmax.y + softmax.dy + 0.5 * layout.cell;
-    let bx = tl.x + (i + 0.5) * outCellW;
-    let by = tl.y - layout.cell;
-    let midY1 = lerp(ty, by, 1 / 6);
-    let midY2 = lerp(ty, by, 3 / 4);
-    addLine2(state.render.lineRender, new Vec3(tx, ty), new Vec3(tx, midY1), lineOpts);
-    addLine2(state.render.lineRender, new Vec3(tx, midY1), new Vec3(bx, midY2), lineOpts);
-    addLine2(state.render.lineRender, new Vec3(bx, midY2), new Vec3(bx, by), lineOpts);
-    let arrLen = 0.6;
-    let arrowLeft = new Vec3(bx - arrLen, by - arrLen);
-    let arrowRight = new Vec3(bx + arrLen, by - arrLen);
-    addLine2(state.render.lineRender, arrowLeft, new Vec3(bx, by), lineOpts);
-    addLine2(state.render.lineRender, arrowRight, new Vec3(bx, by), lineOpts);
-  }
-}
-
 // features/llm-visualization/upstream/src/llm/components/Tokens.ts
 function drawTokens(renderState, layout, display, data, count) {
   let { modelFontBuf: fontBuf, lineRender } = renderState;
@@ -3940,6 +3886,2313 @@ function drawTokens(renderState, layout, display, data, count) {
     addLine2(lineRender, new Vec3(tx, top + delta, 0), new Vec3(bx, bot - delta, 0), opts);
     addLine2(lineRender, new Vec3(bx, bot - delta, 0), new Vec3(bx, bot, 0), opts);
   }
+}
+
+// features/llm-visualization/upstream/src/llm/Interaction.ts
+function getDepSrcIdx(dep, destIdx) {
+  let mtx = dep.srcIdxMtx;
+  let hasXDot = mtx.g(0, 3) !== 0;
+  let hasYDot = mtx.g(1, 3) !== 0;
+  let srcIdx4 = mtx.mulVec4(Vec4.fromVec3(destIdx, 0));
+  let srcIdx = new Vec3(srcIdx4.x, srcIdx4.y, srcIdx4.z);
+  let dotDim = hasXDot ? 1 /* Y */ : 0 /* X */;
+  return { srcIdx, dotDim, otherDim: dotDim === 0 /* X */ ? 1 /* Y */ : 0 /* X */, isDot: hasXDot || hasYDot };
+}
+function getDepDotLen(blk, destIdx) {
+  if (!blk.deps?.dot) {
+    return null;
+  }
+  let dotLen = null;
+  let triLimit = blk.deps.dot.find((d) => d.src.deps?.lowerTri);
+  if (triLimit) {
+    let { srcIdx, dotDim } = getDepSrcIdx(triLimit, destIdx);
+    dotLen = srcIdx.getAt(dotDim);
+  }
+  return dotLen;
+}
+function drawDependences(state, blk, idx) {
+  let layout = state.layout;
+  let deps = blk.deps;
+  if (!deps) {
+    return;
+  }
+  function drawDep(dep, destIdx, dotLen) {
+    let { srcIdx, dotDim, otherDim, isDot } = getDepSrcIdx(dep, destIdx);
+    if (blk.deps?.special === 4 /* InputEmbed */ && dep.src === state.layout.tokEmbedObj) {
+      let tokenIdx = getBlockValueAtIdx(state.layout.idxObj, new Vec3(destIdx.x, 0, destIdx.z));
+      isDot = false;
+      srcIdx.setAt(0 /* X */, tokenIdx ?? 0);
+    }
+    if (isDot) {
+      if (dep.src.deps?.lowerTri) {
+        dotLen = dotLen ?? srcIdx.getAt(dotDim);
+      }
+      let sub = splitGridForHighlight(layout, dep.src, dotDim, srcIdx.getAt(dotDim));
+      if (sub && isNotNil(dotLen)) {
+        splitGrid(layout, sub, otherDim, dotLen, 0);
+        for (let parts of findSubBlocks(sub, otherDim, null, dotLen)) {
+          parts.highlight = 0.5;
+        }
+      } else {
+        if (sub) sub.highlight = 0.5;
+      }
+    } else {
+      let sub = splitGridForHighlight(layout, dep.src, 0 /* X */, srcIdx.x);
+      if (!sub) return;
+      sub = splitGridForHighlight(layout, sub, 1 /* Y */, srcIdx.y);
+      if (!sub) return;
+      sub = splitGridForHighlight(layout, sub, 2 /* Z */, srcIdx.z);
+      if (sub) sub.highlight = 0.5;
+    }
+  }
+  if (deps.dot) {
+    let dotLen = getDepDotLen(blk, idx);
+    for (let dep of deps.dot) {
+      drawDep(dep, idx, dotLen);
+    }
+  }
+  if (deps.add) {
+    for (let dep of deps.add) {
+      drawDep(dep, idx);
+    }
+  }
+}
+
+// features/llm-visualization/upstream/src/llm/components/ModelCard.ts
+var _lineRectArr = new Float32Array(3 * 4);
+function drawLineRect(render, tl, br, opts) {
+  _lineRectArr[0] = tl.x;
+  _lineRectArr[1] = tl.y;
+  _lineRectArr[2] = 0;
+  _lineRectArr[3] = br.x;
+  _lineRectArr[4] = tl.y;
+  _lineRectArr[5] = 0;
+  _lineRectArr[6] = br.x;
+  _lineRectArr[7] = br.y;
+  _lineRectArr[8] = 0;
+  _lineRectArr[9] = tl.x;
+  _lineRectArr[10] = br.y;
+  _lineRectArr[11] = 0;
+  drawLineSegs(render.lineRender, _lineRectArr, makeLineOpts({ ...opts, closed: true }));
+}
+
+// features/llm-visualization/upstream/src/llm/components/TextLayout.ts
+function lineHeight(fontOpts) {
+  return fontOpts.size * 1.2;
+}
+function mkTextBlock(args) {
+  let type = args.type ?? (args.text ? 1 /* Text */ : args.subs ? 0 /* Line */ : isNotNil(args.cellX) && isNotNil(args.cellY) ? 4 /* Cells */ : null);
+  if (isNil(type)) {
+    throw new Error("Unknown text block type");
+  }
+  let opts = args.opts;
+  if (opts && args.color) {
+    opts = { ...opts, color: args.color };
+  }
+  if (!opts) {
+    throw new Error("No font opts");
+  }
+  return {
+    type,
+    id: args.id,
+    text: args.text,
+    align: args.align,
+    opts,
+    size: args.size ?? new Vec3(0, 0, 0),
+    offset: args.offset ?? new Vec3(0, 0, 0),
+    subs: args.subs?.filter(isNotNil).map((a) => mkTextBlock({ ...a, opts: a.opts ?? opts })),
+    rectOpts: args.rectOpts,
+    draw: args.draw,
+    cellX: args.cellX,
+    cellY: args.cellY
+  };
+}
+function sqrtSpacing(opts, inner) {
+  return {
+    tl: new Vec3(inner.size.y * 0.9, inner.size.y * 0.2),
+    br: new Vec3(inner.size.y * 0.1, 0)
+  };
+}
+function divideSpacing(opts, inner) {
+  return {
+    padX: 0,
+    padInnerY: inner.size.y * 0.5
+  };
+}
+var cellSize = 7;
+function cellSizing(blk) {
+  return {
+    size: new Vec3(blk.cellX * cellSize, blk.cellY * cellSize),
+    pad: cellSize * 1
+  };
+}
+function sizeBlock(render, blk) {
+  let opts = blk.opts;
+  switch (blk.type) {
+    case 0 /* Line */: {
+      let x = 0;
+      let maxH = 0;
+      for (let sub of blk.subs) {
+        sizeBlock(render, sub);
+        x += sub.size.x;
+        maxH = Math.max(maxH, sub.size.y);
+      }
+      blk.size = new Vec3(x, maxH, 0);
+      if (blk.rectOpts) {
+        blk.size.x += cellSize * 0.5;
+        blk.size.y += cellSize * 0.5;
+      }
+      break;
+    }
+    case 1 /* Text */: {
+      if (isNil(blk.text)) {
+        throw new Error("Text block has no text");
+      }
+      blk.size = new Vec3(
+        Math.max(blk.size.x, measureText(render.modelFontBuf, blk.text, opts)),
+        lineHeight(opts)
+      );
+      break;
+    }
+    case 2 /* Sqrt */: {
+      let sub = blk.subs[0];
+      sizeBlock(render, sub);
+      let spacing = sqrtSpacing(opts, sub);
+      blk.size = sub.size.add(spacing.tl).add(spacing.br);
+      break;
+    }
+    case 3 /* Divide */: {
+      let subA = blk.subs[0];
+      let subB = blk.subs[1];
+      sizeBlock(render, subA);
+      sizeBlock(render, subB);
+      let spacing = divideSpacing(opts, subA);
+      blk.size = new Vec3(Math.max(subA.size.x, subB.size.x) + spacing.padX, subA.size.y + subB.size.y + spacing.padInnerY, 0);
+      break;
+    }
+    case 4 /* Cells */: {
+      let spacing = cellSizing(blk);
+      blk.size = new Vec3(spacing.size.x + spacing.pad, spacing.size.y);
+      break;
+    }
+    case 5 /* Custom */: {
+      break;
+    }
+    default: {
+      let _exhaustCheck = blk.type;
+    }
+  }
+}
+function layoutBlock(blk) {
+  switch (blk.type) {
+    case 0 /* Line */: {
+      let x = blk.offset.x + cellSize * 0.25;
+      let midY = blk.offset.y + blk.size.y / 2;
+      for (let sub of blk.subs) {
+        sub.offset = new Vec3(x, midY - sub.size.y / 2).round_();
+        layoutBlock(sub);
+        x += sub.size.x;
+      }
+      break;
+    }
+    case 2 /* Sqrt */: {
+      let sub = blk.subs[0];
+      sub.offset = blk.offset.add(sqrtSpacing(blk.opts, sub).tl).round_();
+      layoutBlock(sub);
+      break;
+    }
+    case 3 /* Divide */: {
+      let subA = blk.subs[0];
+      let subB = blk.subs[1];
+      let midX = blk.size.x / 2;
+      subA.offset = blk.offset.add(new Vec3(midX - subA.size.x / 2, 0)).round_();
+      subB.offset = blk.offset.add(new Vec3(midX - subB.size.x / 2, blk.size.y - subB.size.y)).round_();
+      layoutBlock(subA);
+      layoutBlock(subB);
+      break;
+    }
+    case 1 /* Text */: {
+      break;
+    }
+    case 4 /* Cells */: {
+      break;
+    }
+    case 5 /* Custom */: {
+      break;
+    }
+    default: {
+      let _exhaustCheck = blk.type;
+    }
+  }
+}
+function drawBlock(render, blk) {
+  switch (blk.type) {
+    case 0 /* Line */: {
+      for (let sub of blk.subs) {
+        drawBlock(render, sub);
+      }
+      if (blk.rectOpts) {
+        let rectOpts = makeLineOpts(blk.rectOpts);
+        let tl = blk.offset.round().add(new Vec3(0.5, 0.5));
+        let br = blk.offset.add(blk.size).round().add(new Vec3(0.5, 0.5));
+        drawRoundedRect(render, tl, br, rectOpts.color.mul(0.24), rectOpts.mtx, 2);
+        drawLineRect(render, tl, br, rectOpts);
+      }
+      break;
+    }
+    case 1 /* Text */: {
+      let xPos = blk.offset.x;
+      if (blk.align === 2 /* Right */) {
+        xPos = blk.offset.x + blk.size.x - measureText(render.modelFontBuf, blk.text, blk.opts);
+      }
+      drawText(render.modelFontBuf, blk.text, xPos, blk.offset.y + blk.opts.size * 0.1, blk.opts);
+      break;
+    }
+    case 2 /* Sqrt */: {
+      let sub = blk.subs[0];
+      let subY = sub.size.y;
+      let sqrtX = blk.offset.x;
+      let sqrtY = blk.offset.y - subY * 0.9;
+      let sqrtSize = subY * 1.8;
+      let mathOpts = { ...blk.opts, faceName: "cmsy10", size: sqrtSize };
+      let lineOpts = makeLineOpts({ color: blk.opts.color, n: new Vec3(0, 0, 1), mtx: blk.opts.mtx, thick: 0.4 });
+      let lineX = sqrtX + sqrtSize * 0.5;
+      let lineY = sqrtY + sqrtSize * 0.5;
+      addLine2(render.lineRender, new Vec3(lineX, lineY).round_(), new Vec3(sub.offset.x + sub.size.x, lineY).round_(), lineOpts);
+      drawText(render.modelFontBuf, "p", sqrtX, sqrtY, mathOpts);
+      drawBlock(render, sub);
+      break;
+    }
+    case 3 /* Divide */: {
+      let subA = blk.subs[0];
+      let subB = blk.subs[1];
+      let lineOpts = makeLineOpts({ color: blk.opts.color, n: new Vec3(0, 0, 1), mtx: blk.opts.mtx, thick: 0.4 });
+      let lineY = lerp(subA.offset.y + subA.size.y, subB.offset.y, 0.5) + 1;
+      addLine2(render.lineRender, new Vec3(blk.offset.x, lineY), new Vec3(blk.offset.x + blk.size.x, lineY), lineOpts);
+      drawBlock(render, blk.subs[0]);
+      drawBlock(render, blk.subs[1]);
+      break;
+    }
+    case 4 /* Cells */: {
+      let center = blk.offset.add(new Vec3(blk.size.x / 2, blk.size.y / 2));
+      let spacing = cellSizing(blk);
+      drawCells(render, new Vec3(blk.cellX, blk.cellY), center, spacing.size, blk.opts.color, blk.opts.mtx);
+      break;
+    }
+    case 5 /* Custom */: {
+      blk.draw?.(blk, render);
+      break;
+    }
+    default: {
+      let _exhaustCheck = blk.type;
+    }
+  }
+}
+function drawCells(render, nCells, center, size, color, mtx) {
+  let thick = 0.4;
+  let tl = center.mulAdd(size, -0.5).add(new Vec3(0.5, 0.5));
+  let br = center.mulAdd(size, 0.5).add(new Vec3(0.5, 0.5));
+  let lineOpts = makeLineOpts({ color, mtx, n: new Vec3(0, 0, 1), thick });
+  drawLineRect(render, tl, br, lineOpts);
+  addQuad(render.triRender, tl, br, color.mul(0.3), mtx);
+  for (let i = 1; i < nCells.x; i++) {
+    let lineX = tl.x + i * cellSize;
+    addLine2(render.lineRender, new Vec3(lineX, tl.y, 0), new Vec3(lineX, br.y, 0), lineOpts);
+  }
+  for (let i = 1; i < nCells.y; i++) {
+    let lineY = tl.y + i * cellSize;
+    addLine2(render.lineRender, new Vec3(tl.x, lineY, 0), new Vec3(br.x, lineY, 0), lineOpts);
+  }
+}
+
+// features/llm-visualization/upstream/src/llm/components/DataFlow.ts
+function drawDataFlow(state, blk, destIdx, pinIdx) {
+  if (!blk.deps) {
+    return;
+  }
+  let prevPhase = state.render.sharedRender.activePhase;
+  state.render.sharedRender.activePhase = 3 /* Overlay2D */;
+  pinIdx = pinIdx ?? destIdx;
+  let cellPos = new Vec3(
+    cellPosition(state.layout, blk, 0 /* X */, pinIdx.x) + state.layout.cell * 0.5,
+    cellPosition(state.layout, blk, 1 /* Y */, pinIdx.y) + state.layout.cell * 0.5,
+    cellPosition(state.layout, blk, 2 /* Z */, pinIdx.z) + state.layout.cell * 1.1
+  );
+  let resMtx = new Mat4f();
+  let screenPos = projectToScreen(state, cellPos).round_();
+  let center = screenPos.add(new Vec3(0, -50));
+  let dataFlowArgs = {
+    state,
+    center,
+    blk,
+    destIdx,
+    mtx: resMtx
+  };
+  let bb = new BoundingBox3d();
+  if (blk.deps.lowerTri && destIdx.x > destIdx.y) {
+    drawZeroSymbol(dataFlowArgs);
+  } else if (blk.deps.special === 4 /* InputEmbed */) {
+    bb = drawOLInputEmbed(dataFlowArgs);
+  } else if (blk.deps.special === 3 /* LayerNorm */) {
+    bb = drawLayerNorm(dataFlowArgs);
+  } else if (blk.deps.special === 5 /* LayerNormMu */) {
+    bb = drawLayerNormMuAgg(dataFlowArgs);
+  } else if (blk.deps.special === 6 /* LayerNormSigma */) {
+    bb = drawLayerNormSigmaAgg(dataFlowArgs);
+  } else if (blk.deps.special === 7 /* SoftmaxAggMax */) {
+    bb = drawSoftmaxAggMax(dataFlowArgs);
+  } else if (blk.deps.special === 8 /* SoftmaxAggExp */) {
+    bb = drawSoftmaxAggExp(dataFlowArgs);
+  } else if (blk.deps.special === 1 /* Softmax */) {
+    bb = drawSoftmax(dataFlowArgs);
+  } else if (blk.deps.special === 9 /* Attention */) {
+    bb = drawAttention(dataFlowArgs);
+  } else if (blk.deps.special === 2 /* Gelu */) {
+    bb = drawGeluActivation(dataFlowArgs);
+  } else if (blk.deps.dot) {
+    bb = drawOLMatrixMul(dataFlowArgs);
+  } else if (blk.deps.add && blk.deps.add.length === 2) {
+    bb = drawResidualAdd(dataFlowArgs);
+  }
+  if (!bb.empty) {
+    let cellIdxBb = drawCellIndexAndValue(dataFlowArgs, bb);
+    let fullBB = new BoundingBox3d(bb.min, bb.max, cellIdxBb.min, cellIdxBb.max);
+    drawDepArrows(dataFlowArgs, fullBB);
+  }
+  state.render.sharedRender.activePhase = prevPhase;
+}
+function drawCircle(render, center, radius, width, color, mtx) {
+  let nPoints = 30;
+  let buf = new Float32Array(nPoints * 3);
+  for (let i = 0; i < nPoints; i++) {
+    let theta = i / nPoints * Math.PI * 2;
+    buf[i * 3 + 0] = center.x + Math.cos(theta) * radius;
+    buf[i * 3 + 1] = center.y + Math.sin(theta) * radius;
+    buf[i * 3 + 2] = center.z;
+  }
+  drawLineSegs(render.lineRender, buf, makeLineOpts({ color, n: new Vec3(0, 0, 1), thick: width, closed: true, mtx }));
+}
+function projectToScreen(state, modelPos) {
+  let model = state.camera.modelMtx;
+  let view = state.camera.viewMtx;
+  let ndc = view.mulVec3Proj(model.mulVec3Affine(modelPos));
+  return new Vec3(
+    (ndc.x + 1) * 0.5 * state.render.size.x,
+    (1 - ndc.y) * 0.5 * state.render.size.y,
+    0
+  );
+}
+var weightSrcColor = new Vec4(0.4, 0.4, 0.9, 1);
+var workingSrcColor = new Vec4(0.3, 0.7, 0.3, 1);
+var opColor = new Vec4(0.9, 0.9, 0.9, 1);
+var backWhiteColor = new Vec4(0, 0, 0, 1).mul(1);
+var nameColor = new Vec4(1, 1, 1, 1);
+var embedBlockHeight = 30;
+var tokEmbedBlockWidth = 40;
+var posEmbedBlockWidth = 35;
+function drawOLInputEmbed(args) {
+  let { center, mtx } = args;
+  return drawMaths(args, center, mkTextBlock({
+    opts: { color: nameColor, mtx, size: 16 },
+    subs: [
+      { type: 5 /* Custom */, draw: (blk) => drawOLIndexLookup(args, blk.offset), size: new Vec3(tokEmbedBlockWidth, embedBlockHeight) },
+      { text: " + " },
+      { type: 5 /* Custom */, draw: (blk) => drawOLPosEmbedLookup(args, blk.offset), size: new Vec3(posEmbedBlockWidth, embedBlockHeight) }
+    ]
+  }), [20, 0, 0, 0]);
+}
+function getBlockValueAtIdx(blk, blkIdx) {
+  let localBuffer = blk.access?.src.localBuffer;
+  if (!blk.access || !localBuffer) {
+    return null;
+  }
+  let bufferTex = blk.access.src;
+  let m = blk.access.mat;
+  let bx = blkIdx.x, by = blkIdx.y, bz = blkIdx.z;
+  let texX = Math.round(m[0] * bx + m[1] * by + m[2] * bz + m[3]);
+  let texY = Math.round(m[4] * bx + m[5] * by + m[6] * bz + m[7]);
+  let channelIdx = blk.access.channel === "r" ? 0 : blk.access.channel === "g" ? 1 : blk.access.channel === "b" ? 2 : 3;
+  let idx = texY * bufferTex.width * bufferTex.channels + texX * bufferTex.channels + channelIdx;
+  if (idx < 0 || idx >= localBuffer.length) {
+    return null;
+  }
+  return localBuffer[idx];
+}
+function drawOLIndexLookup(args, offset) {
+  let { state, center, destIdx, mtx } = args;
+  let tokenIdx = getBlockValueAtIdx(state.layout.idxObj, new Vec3(destIdx.x, 0, destIdx.z));
+  let tokenPct = isNotNil(tokenIdx) ? tokenIdx / (state.layout.tokEmbedObj.cx - 1) : 0.3;
+  let heightPct = destIdx.y / (state.layout.residual0.cy - 1);
+  let pos = center.add(new Vec3(-35, -20, 0));
+  let color = Colors.Weights;
+  let tl = offset;
+  let br = tl.add(new Vec3(tokEmbedBlockWidth, embedBlockHeight));
+  drawLineRect(state.render, tl, br, makeLineOpts({ color, mtx, n: new Vec3(0, 0, 1), thick: 0.4 }));
+  addQuad(state.render.triRender, tl, br, backWhiteColor, mtx);
+  let colW = 8;
+  let colTl = new Vec3(tl.x + lerp(0, br.x - tl.x - colW, tokenPct), tl.y);
+  let colBr = new Vec3(colTl.x + colW, br.y);
+  let cellTl = new Vec3(colTl.x, colTl.y + lerp(0, br.y - tl.y - colW, heightPct));
+  let cellBr = new Vec3(colBr.x, cellTl.y + colW);
+  addQuad(state.render.triRender, colTl, colBr, color.mul(0.3), mtx);
+  addQuad(state.render.triRender, cellTl, cellBr, color, mtx);
+  let lineColor = Colors.Intermediates;
+  let lineEndX = colTl.x + colW / 2;
+  let lineEndY = colTl.y - 5;
+  let lineStartX = br.x;
+  let lineHeight2 = 10;
+  let pts = new Float32Array([
+    lineStartX,
+    lineEndY - lineHeight2,
+    0,
+    lineEndX,
+    lineEndY - lineHeight2,
+    0,
+    lineEndX,
+    lineEndY,
+    0
+  ]);
+  let lineOpts = makeLineOpts({ color: lineColor, mtx, n: new Vec3(0, 0, 1), thick: 0.5 });
+  drawLineSegs(state.render.lineRender, pts, lineOpts);
+  drawCells(state.render, new Vec3(1, 1), new Vec3(lineStartX + 8, lineEndY - lineHeight2), new Vec3(7, 7), Colors.Intermediates, mtx);
+}
+function drawOLPosEmbedLookup(args, offset) {
+  let { state, center, destIdx, mtx } = args;
+  let posPct = destIdx.x / (state.layout.posEmbedObj.cx - 1);
+  let heightPct = destIdx.y / (state.layout.residual0.cy - 1);
+  let pos = center.add(new Vec3(35, -20, 0));
+  let color = Colors.Weights;
+  let tl = offset;
+  let br = tl.add(new Vec3(tokEmbedBlockWidth, embedBlockHeight));
+  drawLineRect(state.render, tl, br, makeLineOpts({ color, mtx, n: new Vec3(0, 0, 1), thick: 0.4 }));
+  addQuad(state.render.triRender, tl, br, backWhiteColor, mtx);
+  let colW = 8;
+  let colTl = new Vec3(tl.x + lerp(0, br.x - tl.x - colW, posPct), tl.y);
+  let colBr = new Vec3(colTl.x + colW, br.y);
+  let cellTl = new Vec3(colTl.x, colTl.y + lerp(0, br.y - tl.y - colW, heightPct));
+  let cellBr = new Vec3(colBr.x, cellTl.y + colW);
+  addQuad(state.render.triRender, colTl, colBr, color.mul(0.3), mtx);
+  addQuad(state.render.triRender, cellTl, cellBr, color, mtx);
+  let textOpts = { color: new Vec4(1, 1, 1, 1).mul(0.8), mtx, size: 20 };
+  let tw = measureText(state.render.modelFontBuf, "t", textOpts);
+  drawText(state.render.modelFontBuf, "t", (cellTl.x + cellBr.x) / 2 - tw / 2, colTl.y - 3 - textOpts.size, textOpts);
+}
+function drawOLMatrixMul(args) {
+  let { center, mtx, blk } = args;
+  let fontOpts = { color: opColor, mtx, size: 16 };
+  let hasAdd = !!blk.deps.add;
+  let dotA = blk.deps.dot[0];
+  let dotB = blk.deps.dot[1];
+  function cellSizeAndColor(dep) {
+    let isRow = dep.srcIdxMtx.g(0, 3) === 1;
+    return {
+      cellX: isRow ? 4 : 1,
+      cellY: isRow ? 1 : 4,
+      color: dep.src.t === "w" ? weightSrcColor : workingSrcColor
+    };
+  }
+  let textBlock = mkTextBlock({
+    opts: fontOpts,
+    subs: [
+      hasAdd ? { cellX: 1, cellY: 1, color: weightSrcColor } : null,
+      hasAdd ? { text: " + dot(" } : { text: "dot(" },
+      cellSizeAndColor(dotA),
+      { text: "," },
+      cellSizeAndColor(dotB),
+      { text: ")" }
+    ].filter(isNotNil)
+  });
+  return drawMaths(args, center, textBlock);
+}
+function drawRoundedRect(state, tl, br, color, mtx, radius) {
+  if (radius === 0) {
+    addQuad(state.triRender, tl, br, color, mtx);
+    return;
+  }
+  radius = Math.min(radius, (br.x - tl.x) / 2, (br.y - tl.y) / 2);
+  let n = new Vec3(0, 0, 1);
+  let innerQuadTl = tl.add(new Vec3(radius, radius));
+  let innerQuadBr = br.sub(new Vec3(radius, radius));
+  addQuad(state.triRender, innerQuadTl, innerQuadBr, color, mtx);
+  addVert(state.triRender, new Vec3(innerQuadBr.x, br.y), color, n, mtx);
+  addVert(state.triRender, new Vec3(innerQuadBr.x, innerQuadBr.y), color, n, mtx);
+  for (let cIdx = 0; cIdx < 4; cIdx++) {
+    let pivot = new Vec3(
+      cIdx < 2 ? innerQuadTl.x : innerQuadBr.x,
+      (cIdx + 1) % 4 < 2 ? innerQuadBr.y : innerQuadTl.y
+    );
+    let startTheta = (cIdx + 1) % 4 * Math.PI / 2;
+    let nRadiusVerts = 6;
+    for (let i = 0; i < nRadiusVerts + 1; i++) {
+      let pt = new Vec3(
+        pivot.x + radius * Math.cos(startTheta + i * Math.PI / nRadiusVerts / 2),
+        pivot.y + radius * Math.sin(startTheta + i * Math.PI / nRadiusVerts / 2)
+      );
+      addVert(state.triRender, pt, color, n, mtx);
+      addVert(state.triRender, pivot, color, n, mtx);
+    }
+  }
+  addPrimitiveRestart(state.triRender);
+}
+function drawMaths(args, bottomMiddle, textBlk, pad) {
+  let { state, mtx } = args;
+  let value = getBlockValueAtIdx(args.blk, args.destIdx);
+  if (textBlk.type === 0 /* Line */) {
+    textBlk.subs.push(
+      mkTextBlock({ text: "  =  ", opts: textBlk.opts })
+    );
+    if (isNotNil(value)) {
+      textBlk.subs.push(
+        mkTextBlock({ text: value.toFixed(2), opts: textBlk.opts, size: new Vec3(35, 0), align: 2 /* Right */ })
+      );
+    }
+  }
+  sizeBlock(state.render, textBlk);
+  textBlk.offset = new Vec3(bottomMiddle.x - textBlk.size.x / 2, bottomMiddle.y - textBlk.size.y);
+  layoutBlock(textBlk);
+  let padX = 4;
+  let padY = 4;
+  let tl = textBlk.offset.sub(new Vec3(padX + getPad(pad, 2), padY + getPad(pad, 0)));
+  let br = textBlk.offset.add(textBlk.size).add(new Vec3(padX * 2 + getPad(pad, 1), padY + getPad(pad, 3)));
+  drawRoundedRect(state.render, tl, br, backWhiteColor, mtx, 4);
+  drawBlock(state.render, textBlk);
+  return new BoundingBox3d(tl, br);
+}
+function getPad(pad, dir) {
+  if (Array.isArray(pad)) {
+    return pad[dir];
+  } else if (typeof pad === "number") {
+    return pad;
+  }
+  return 0;
+}
+function drawLayerNormMuAgg(args) {
+  let { center, mtx } = args;
+  let fontOpts = { color: opColor, mtx, size: 16 };
+  let textBlock = mkTextBlock({
+    opts: fontOpts,
+    subs: [
+      { text: "E[", color: workingSrcColor },
+      { cellX: 1, cellY: 3, color: workingSrcColor },
+      { text: "]", color: workingSrcColor }
+    ]
+  });
+  return drawMaths(args, center, textBlock);
+}
+function drawLayerNormSigmaAgg(args) {
+  let { center, mtx } = args;
+  let fontOpts = { color: opColor, mtx, size: 16 };
+  let textBlock = mkTextBlock({
+    opts: fontOpts,
+    subs: [{
+      type: 2 /* Sqrt */,
+      subs: [
+        { type: 0 /* Line */, subs: [
+          { text: "Var[", color: workingSrcColor },
+          { cellX: 1, cellY: 3, color: workingSrcColor },
+          { text: "]", color: workingSrcColor },
+          { text: " + \u03B5" }
+        ] }
+      ]
+    }]
+  });
+  return drawMaths(args, center, textBlock);
+}
+function drawLayerNorm(args) {
+  let { center, mtx } = args;
+  let fontOpts = { color: opColor, mtx, size: 16 };
+  let blk = mkTextBlock({
+    opts: fontOpts,
+    subs: [
+      {
+        type: 3 /* Divide */,
+        subs: [
+          {
+            subs: [
+              { cellX: 1, cellY: 1, color: workingSrcColor },
+              { text: " \u2014 " },
+              {
+                type: 0 /* Line */,
+                rectOpts: { color: Colors.Aggregates.mul(0.8), mtx, thick: 1, dash: 6 },
+                subs: [
+                  { text: "E[", color: workingSrcColor },
+                  { cellX: 1, cellY: 3, color: workingSrcColor },
+                  { text: "]", color: workingSrcColor }
+                ]
+              }
+            ]
+          },
+          {
+            type: 0 /* Line */,
+            rectOpts: { color: Colors.Aggregates.mul(0.8), mtx, thick: 1, dash: 6 },
+            subs: [{
+              type: 2 /* Sqrt */,
+              subs: [
+                { type: 0 /* Line */, subs: [
+                  { text: "Var[", color: workingSrcColor },
+                  { cellX: 1, cellY: 3, color: workingSrcColor },
+                  { text: "]", color: workingSrcColor },
+                  { text: " + \u03B5" }
+                ] }
+              ]
+            }]
+          }
+        ]
+      },
+      { text: "  \u2027 " },
+      { text: "\u03B3", color: weightSrcColor },
+      { text: " + " },
+      { text: "\u03B2", color: weightSrcColor }
+    ]
+  });
+  return drawMaths(args, center, blk);
+}
+function drawResidualAdd(args) {
+  let { center, mtx } = args;
+  let fontOpts = { color: opColor, mtx, size: 16 };
+  let textBlock = mkTextBlock({
+    opts: fontOpts,
+    subs: [
+      { cellX: 1, cellY: 1, opts: { ...fontOpts, color: workingSrcColor } },
+      { text: " + " },
+      { cellX: 1, cellY: 1, opts: { ...fontOpts, color: workingSrcColor } }
+    ]
+  });
+  return drawMaths(args, center, textBlock);
+}
+function drawZeroSymbol(args) {
+  let { center, mtx } = args;
+  let fontOpts = { color: opColor, mtx, size: 16 };
+  let textBlock = mkTextBlock({
+    opts: fontOpts,
+    subs: [
+      { text: "-" }
+    ]
+  });
+  return drawMaths(args, center, textBlock);
+}
+function drawSoftmaxAggMax(args) {
+  let { center, mtx } = args;
+  let fontOpts = { color: opColor, mtx, size: 16 };
+  let textBlock = mkTextBlock({
+    opts: fontOpts,
+    subs: [
+      { text: "max(" },
+      { cellX: 3, cellY: 1, color: workingSrcColor },
+      { text: ")" }
+    ]
+  });
+  return drawMaths(args, center, textBlock);
+}
+function drawSoftmaxAggExp(args) {
+  let { center, mtx } = args;
+  let fontOpts = { color: opColor, mtx, size: 16 };
+  let textBlock = mkTextBlock({
+    opts: fontOpts,
+    subs: [
+      { text: "\u03A3", opts: { ...fontOpts, size: fontOpts.size * 1.5 } },
+      { text: "exp(" },
+      { cellX: 1, cellY: 1, color: workingSrcColor },
+      { text: " - " },
+      {
+        type: 0 /* Line */,
+        rectOpts: { color: Colors.Aggregates.mul(0.8), mtx, thick: 1, dash: 6 },
+        subs: [
+          { text: "max(" },
+          { cellX: 3, cellY: 1, color: workingSrcColor },
+          { text: ")" }
+        ]
+      },
+      { text: ")" }
+    ]
+  });
+  return drawMaths(args, center, textBlock);
+}
+function drawSoftmax(args) {
+  let { center, mtx } = args;
+  let fontOpts = { color: opColor, mtx, size: 16 };
+  let textBlock = mkTextBlock({
+    opts: fontOpts,
+    subs: [{
+      type: 3 /* Divide */,
+      subs: [{
+        subs: [
+          { text: "exp(" },
+          { cellX: 1, cellY: 1, color: workingSrcColor },
+          { text: " - " },
+          {
+            rectOpts: { color: Colors.Aggregates.mul(0.8), mtx, thick: 1, dash: 6 },
+            subs: [
+              { text: "max(" },
+              { cellX: 3, cellY: 1, color: workingSrcColor },
+              { text: ")" }
+            ]
+          },
+          { text: ")" }
+        ]
+      }, {
+        type: 0 /* Line */,
+        rectOpts: { color: Colors.Aggregates.mul(0.8), mtx, thick: 1, dash: 6 },
+        subs: [
+          { text: "\u03A3", opts: { ...fontOpts, size: fontOpts.size * 1.5 } },
+          { text: "exp(" },
+          { cellX: 1, cellY: 1, color: workingSrcColor },
+          { text: " - " },
+          {
+            type: 0 /* Line */,
+            subs: [
+              { text: "max(" },
+              { cellX: 3, cellY: 1, color: workingSrcColor },
+              { text: ")" }
+            ]
+          },
+          { text: ")" }
+        ]
+      }]
+    }]
+  });
+  return drawMaths(args, center, textBlock);
+}
+function drawAttention(args) {
+  let { center, mtx, blk } = args;
+  let fontOpts = { color: opColor, mtx, size: 16 };
+  let dotA = blk.deps.dot[0];
+  let dotB = blk.deps.dot[1];
+  function cellSizeAndColor(dep) {
+    let isRow = dep.srcIdxMtx.g(0, 3) === 1;
+    return {
+      cellX: isRow ? 4 : 1,
+      cellY: isRow ? 1 : 4,
+      color: dep.src.t === "w" ? weightSrcColor : workingSrcColor
+    };
+  }
+  let textBlock = mkTextBlock({
+    opts: fontOpts,
+    subs: [
+      { text: "dot(" },
+      cellSizeAndColor(dotA),
+      { text: "," },
+      cellSizeAndColor(dotB),
+      { text: ") / " },
+      {
+        type: 2 /* Sqrt */,
+        subs: [{ text: "A" }]
+      }
+    ]
+  });
+  return drawMaths(args, center, textBlock);
+}
+function drawGeluActivation(args) {
+  let { state, center, mtx, blk, destIdx } = args;
+  let geluX = (x) => x * 0.5 * (1 + Math.tanh(Math.sqrt(2 / Math.PI) * (x + 0.044715 * x * x * x)));
+  let w = 70;
+  let h = 50;
+  let tl = center.sub(new Vec3(w / 2, h, 0));
+  let br = center.add(new Vec3(w / 2, 0, 0));
+  drawRoundedRect(state.render, tl, br, backWhiteColor, mtx, 4);
+  let halfW = 3;
+  let halfH = halfW * h / w;
+  let hOffset = 1.2;
+  let mappingX = createMapping(tl.x, br.x, -halfW, halfW);
+  let mappingY = createMapping(br.y, tl.y, -halfH + hOffset, halfH + hOffset);
+  let nPts = 30;
+  let pts = new Float32Array(nPts * 3);
+  for (let i = 0; i < nPts; i++) {
+    let x = -halfW + i * halfW * 2 / (nPts - 1);
+    let y = geluX(x);
+    pts[i * 3 + 0] = mappingX(x);
+    pts[i * 3 + 1] = mappingY(y);
+  }
+  let axisLineOpts = makeLineOpts({ color: new Vec4(0.5, 0.5, 0.5, 1), mtx, thick: 1.5 });
+  addLine2(state.render.lineRender, new Vec3(tl.x, mappingY(0)), new Vec3(br.x, mappingY(0)), axisLineOpts);
+  addLine2(state.render.lineRender, new Vec3(mappingX(0), tl.y), new Vec3(mappingX(0), br.y), axisLineOpts);
+  let curveLineOpts = makeLineOpts({ color: Colors.Intermediates, mtx, thick: 3.5 });
+  drawLineSegs(state.render.lineRender, pts, curveLineOpts);
+  let srcBlk = blk.deps.add[0].src;
+  let srcVal = getBlockValueAtIdx(srcBlk, destIdx);
+  if (isNotNil(srcVal)) {
+    let destVal = geluX(srcVal);
+    drawCircle(state.render, new Vec3(mappingX(srcVal), mappingY(destVal)), 2, 1, Colors.Intermediates, mtx);
+  }
+  let bb = new BoundingBox3d(tl, br);
+  return bb;
+}
+function createMapping(range0, range1, domain0, domain1) {
+  let m = (range1 - range0) / (domain1 - domain0);
+  let b = range0 - m * domain0;
+  return (x) => m * x + b;
+}
+function drawCellIndexAndValue(args, bb) {
+  let { center, mtx, blk, destIdx } = args;
+  let fontOpts = { color: opColor, mtx, size: 14 };
+  function mapDimToSub(dim, idx) {
+    if (dim === 0 /* None */) {
+      return null;
+    }
+    let posValue = destIdx.getAt(idx);
+    let color = dimStyleColor(dim);
+    let text = `${dimStyleTextShort(dim)}: ${posValue}`;
+    return { text, color };
+  }
+  let xDim = mapDimToSub(blk.dimX, 0);
+  let yDim = mapDimToSub(blk.dimY, 1);
+  let textBlock = mkTextBlock({
+    opts: fontOpts,
+    subs: [
+      xDim,
+      xDim && yDim && { text: ", " },
+      yDim
+    ]
+  });
+  let padX = 4;
+  let padY = 4;
+  sizeBlock(args.state.render, textBlock);
+  textBlock.offset = new Vec3(args.center.x - textBlock.size.x / 2, bb.min.y - fontOpts.size * 1.2 - padX, 0);
+  layoutBlock(textBlock);
+  let tl = textBlock.offset.sub(new Vec3(padX, padY));
+  let br = textBlock.offset.add(textBlock.size).add(new Vec3(padX * 2, padY * 2));
+  drawRoundedRect(args.state.render, tl, br, backWhiteColor, mtx, 4);
+  drawBlock(args.state.render, textBlock);
+  return new BoundingBox3d(tl, br);
+}
+function drawDepArrows(args, bb) {
+  let { state, mtx, blk, destIdx } = args;
+  if (!blk.deps) {
+    return;
+  }
+  function drawDepArrow(dep, dotLen) {
+    let { srcIdx, otherDim, isDot } = getDepSrcIdx(dep, destIdx);
+    if (dep.src.opacity === 0) {
+      return;
+    }
+    if (isDot) {
+      let { cx } = dimProps(dep.src, otherDim);
+      srcIdx.setAt(otherDim, (dotLen ?? cx) / 2);
+    }
+    if (blk.deps?.special === 4 /* InputEmbed */ && dep.src === args.state.layout.tokEmbedObj) {
+      let tokenIdx = getBlockValueAtIdx(state.layout.idxObj, new Vec3(destIdx.x, 0, destIdx.z));
+      srcIdx.setAt(0 /* X */, tokenIdx ?? 0);
+    }
+    let srcT = dep.src.t;
+    let color = srcT === "w" ? Colors.Weights : srcT === "i" ? Colors.Intermediates : Colors.Aggregates;
+    drawArrow2(dep.src, srcIdx, color, false);
+  }
+  function drawFinalArrow() {
+    drawArrow2(blk, destIdx, new Vec4(0, 0, 0, 1), true);
+  }
+  function drawArrow2(blk2, idx, color, reverse) {
+    let cellPos = new Vec3(
+      cellPosition(state.layout, blk2, 0 /* X */, idx.x) + state.layout.cell * 0.5,
+      cellPosition(state.layout, blk2, 1 /* Y */, idx.y) + state.layout.cell * 0.5,
+      cellPosition(state.layout, blk2, 2 /* Z */, idx.z) + state.layout.cell * 1.1
+    );
+    let lineOpts = makeLineOpts({ n: new Vec3(0, 0, 1), color, mtx, thick: 0.5, dash: 10 });
+    let source = projectToScreen(state, cellPos);
+    let center = bb.center();
+    let dir = source.sub(center).normalize();
+    let tVals = [
+      (bb.min.x - center.x) / dir.x,
+      (bb.max.x - center.x) / dir.x,
+      (bb.min.y - center.y) / dir.y,
+      (bb.max.y - center.y) / dir.y
+    ];
+    let actualTarget = null;
+    for (let t of tVals) {
+      let p = center.mulAdd(dir, t);
+      let eps = 1e-5;
+      if (t > 0 && p.x > bb.min.x - eps && p.y > bb.min.y - eps && p.x < bb.max.x + eps && p.y < bb.max.y + eps) {
+        actualTarget = center.mulAdd(dir, t + 4);
+        break;
+      }
+    }
+    if (actualTarget) {
+      if (reverse) {
+        let tmp = source;
+        source = actualTarget;
+        actualTarget = tmp;
+      }
+      drawArc(state, source, actualTarget, color, mtx, 1);
+    }
+  }
+  if (blk.deps.add) {
+    for (let dep of blk.deps.add) {
+      drawDepArrow(dep);
+    }
+  }
+  if (blk.deps.dot) {
+    let dotLen = getDepDotLen(blk, destIdx);
+    for (let dep of blk.deps.dot) {
+      drawDepArrow(dep, dotLen);
+    }
+  }
+  drawFinalArrow();
+}
+function drawArc(state, a, b, color, mtx, thick) {
+  let dir = b.sub(a).normalize();
+  let bisect = Vec3.cross(dir, new Vec3(0, 0, 1)).normalize();
+  let center = a.lerp(b, 0.5).add(bisect.mul(a.dist(b) * -2));
+  let radius = a.dist(center);
+  let endAngle = Math.atan2(b.y - center.y, b.x - center.x);
+  let startAngle = Math.atan2(a.y - center.y, a.x - center.x);
+  if (endAngle < startAngle) {
+    endAngle += Math.PI * 2;
+  }
+  if (endAngle - startAngle > Math.PI) {
+    endAngle -= Math.PI * 2;
+  }
+  let lineOpts = makeLineOpts({ color, mtx, thick, dash: 0 });
+  let nPts = 32;
+  let pts = new Float32Array(3 * nPts);
+  for (let i = 0; i < nPts; i++) {
+    let t = i / (nPts - 1);
+    let angle = lerp(startAngle, endAngle, t);
+    let x = center.x + radius * Math.cos(angle);
+    let y = center.y + radius * Math.sin(angle);
+    pts[i * 3 + 0] = x;
+    pts[i * 3 + 1] = y;
+  }
+  drawLineSegs(state.render.lineRender, pts, lineOpts);
+  let tangent = new Vec3(Math.sin(endAngle), -Math.cos(endAngle));
+  let dirA = tangent.rotateAbout(new Vec3(0, 0, 1), -Math.PI * 0.25);
+  let dirB = tangent.rotateAbout(new Vec3(0, 0, 1), Math.PI * 0.25);
+  let arrowLen = 10;
+  addLine2(state.render.lineRender, b, b.mulAdd(dirA, arrowLen), lineOpts);
+  addLine2(state.render.lineRender, b, b.mulAdd(dirB, arrowLen), lineOpts);
+}
+
+// features/llm-visualization/upstream/src/llm/walkthrough-develo/DeveloProcessFlow.ts
+function startProcessBefore(state, block) {
+  let activeBlocks = state.layout.cubes.filter((a) => a.t !== "w");
+  return {
+    lastBlockIdx: activeBlocks.indexOf(block) - 1
+  };
+}
+function processUpTo(state, timer, block, prevInfo) {
+  let activeBlocks = state.layout.cubes.filter((a) => a.t !== "w");
+  let firstIdx = prevInfo ? prevInfo.lastBlockIdx + 1 : 0;
+  let lastIdx = activeBlocks.indexOf(block);
+  let cellCounts = activeBlocks.filter((_, i) => i >= firstIdx && i <= lastIdx).map((a) => a.cx * a.cy * Math.pow(a.deps?.dotLen ?? 1, 0.25));
+  let totalCells = cellCounts.reduce((a, b) => a + b, 0);
+  let accCell = 0;
+  let currIdx = firstIdx;
+  let subPos = 0;
+  for (let i = firstIdx; i <= lastIdx; i++) {
+    let blockFract = cellCounts[i - firstIdx] / totalCells;
+    accCell += blockFract;
+    if (timer.t < accCell) {
+      currIdx = i;
+      subPos = (timer.t - (accCell - blockFract)) / blockFract;
+      break;
+    }
+  }
+  let blk = activeBlocks[currIdx];
+  let dim0 = 0 /* X */;
+  let dim1 = 1 /* Y */;
+  if (blk.transpose) {
+    dim0 = 1 /* Y */;
+    dim1 = 0 /* X */;
+  }
+  let { cx } = dimProps(blk, dim0);
+  let { cx: cy } = dimProps(blk, dim1);
+  let horizPos = lerp(0, cx, subPos);
+  let horizIdx = Math.floor(horizPos);
+  let vertPos = lerp(0, cy, horizPos - horizIdx);
+  let vertIdx = Math.floor(vertPos);
+  let blockPos = new Vec3().withSetAt(dim0, horizIdx).withSetAt(dim1, vertIdx);
+  let pinPos = new Vec3(Math.floor(cx / 2), 0, 0);
+  if (blk === state.layout.residual0) {
+    pinPos = new Vec3(cx * 2, -2, 0);
+  }
+  if (timer.t >= 1) {
+    currIdx = lastIdx;
+  }
+  for (let i = firstIdx; i < currIdx; i++) {
+    let blk2 = activeBlocks[i];
+    if (blk2.access) {
+      blk2.access.disable = false;
+    }
+  }
+  if (timer.active && timer.t < 1) {
+    drawDependences(state, blk, blockPos);
+    drawDataFlow(state, blk, blockPos, pinPos);
+    for (let label of state.layout.labels) {
+      for (let c of label.cubes) {
+        if (c === blk) {
+          label.visible = 1;
+        }
+      }
+    }
+    blk.highlight = 0.3;
+    let column = splitGrid(state.layout, blk, dim0, horizPos, 0);
+    if (column) {
+      for (let col of findSubBlocks(blk, dim0, null, horizIdx)) {
+        if (col.access) {
+          col.access.disable = false;
+          col.highlight = 0.1;
+        }
+      }
+      column.highlight = 0.4;
+      let curr = splitGrid(state.layout, column, dim1, vertPos, 0);
+      for (let blk2 of findSubBlocks(column, dim1, null, vertIdx)) {
+        if (blk2.access) {
+          blk2.access.disable = false;
+        }
+      }
+      if (curr) {
+        curr.highlight = 0.7;
+      }
+    }
+  } else if (timer.active) {
+    let blk2 = activeBlocks[lastIdx];
+    if (blk2.access) {
+      blk2.access.disable = false;
+    }
+  }
+  let info = prevInfo ?? { lastBlockIdx: currIdx };
+  info.lastBlockIdx = lastIdx;
+  return info;
+}
+
+// features/llm-visualization/upstream/src/llm/walkthrough-develo/DeveloWalkthroughTools.ts
+function createAtTime(walkthrough, start, duration, wait) {
+  duration = duration ?? 0;
+  wait = wait ?? 0;
+  let info = {
+    name: "",
+    start,
+    duration,
+    wait,
+    t: duration === 0 ? walkthrough.time > start ? 1 : 0 : clamp((walkthrough.time - start) / duration, 0, 1),
+    active: walkthrough.time > start
+  };
+  walkthrough.times.push(info);
+  walkthrough.phaseLength = Math.max(walkthrough.phaseLength, start + duration + wait);
+  return info;
+}
+function atTime(walkthrough, start, duration, wait) {
+  return createAtTime(walkthrough, start, duration, wait);
+}
+function afterTime(walkthrough, prev, duration, wait) {
+  prev = prev ?? walkthrough.times[walkthrough.times.length - 1] ?? { name: "", start: 0, duration: 0, wait: 0, t: 0, active: false };
+  return atTime(walkthrough, prev.start + prev.duration + prev.wait, duration, wait);
+}
+function cleanup(walkthrough, t, times) {
+  let list = times ?? walkthrough.times;
+  if (t.t > 0) {
+    for (let prevTime of list) {
+      prevTime.t = 1 - t.t;
+      if (t.t >= 1) {
+        prevTime.active = false;
+      }
+    }
+  }
+}
+function getPhaseTransitiveData(wt) {
+  wt.phaseTransitiveData ?? (wt.phaseTransitiveData = {});
+  return wt.phaseTransitiveData;
+}
+function setInitialCamera(state, target, rot) {
+  let wt = state.walkthrough;
+  wt.cameraInitial = { angle: rot, center: target };
+  let data = getPhaseTransitiveData(wt);
+  if (wt.time === 0 && wt.running) {
+    data.cameraSrc ?? (data.cameraSrc = { angle: state.camera.angle, center: state.camera.center });
+    data.cameraT ?? (data.cameraT = 0);
+    if (data.cameraT < 1) {
+      let src = data.cameraSrc;
+      let dest = wt.cameraInitial;
+      let t = data.cameraT;
+      state.camera.angle = src.angle.lerp(dest.angle, t);
+      state.camera.center = src.center.lerp(dest.center, t);
+      data.cameraT = t + wt.viewDt / 1e3 * 1.5;
+      wt.markDirty();
+    }
+  }
+}
+function moveCameraTo(state, time, target, rot) {
+  let wt = state.walkthrough;
+  let phaseData = wt.phaseData.get(wt.phase);
+  if (!phaseData) {
+    wt.phaseData.set(wt.phase, phaseData = { cameraData: null });
+  }
+  if (!phaseData.cameraData) {
+    phaseData.cameraData = /* @__PURE__ */ new Map();
+  }
+  let prevTime = [...phaseData.cameraData.entries()].filter(([t]) => t < time.start).pop()?.[1];
+  let camData = phaseData.cameraData.get(time.start);
+  if (!camData) {
+    phaseData.cameraData.set(time.start, camData = {
+      initialCaptured: prevTime ? void 0 : wt.cameraInitial ?? {
+        angle: state.camera.angle,
+        center: state.camera.center
+      },
+      target: { angle: rot, center: target }
+    });
+  }
+  let src = prevTime?.target ?? wt.cameraInitial ?? camData.initialCaptured;
+  let dest = {
+    center: target,
+    angle: rot
+  };
+  let isMoving = wt.running || wt.time !== wt.prevTime;
+  let prevWasActive = wt.prevTime >= time.start && wt.prevTime <= time.start + time.duration;
+  if (src && isMoving && (time.active || prevWasActive)) {
+    let t = time.t;
+    state.camera.angle = src.angle.lerp(dest.angle, t);
+    state.camera.center = src.center.lerp(dest.center, t);
+  }
+}
+function phaseTools(state) {
+  let phaseState = state.walkthrough;
+  function atTimeBound(start, duration, wait) {
+    return createAtTime(phaseState, start, duration, wait);
+  }
+  function afterTimeBound(prev, duration, wait) {
+    return afterTime(phaseState, prev, duration, wait);
+  }
+  function cleanupBound(t, times) {
+    cleanup(phaseState, t, times);
+  }
+  return { atTime: atTimeBound, afterTime: afterTimeBound, cleanup: cleanupBound };
+}
+
+// features/llm-visualization/upstream/src/llm/walkthrough-develo/DeveloEmbedding.ts
+function runDeveloEmbedding(args) {
+  let { walkthrough: wt, state, tools: { afterTime: afterTime2, cleanup: cleanup2 }, layout } = args;
+  let render = state.render;
+  setInitialCamera(state, new Vec3(15.654, 0, -80.905), new Vec3(287, 14.5, 3.199));
+  wt.dimHighlightBlocks = [layout.idxObj, layout.tokEmbedObj, layout.posEmbedObj, layout.residual0];
+  let t_moveCamera = afterTime2(null, 1);
+  let t0_splitEmbedAnim = afterTime2(null, 0.3);
+  let t1_fadeEmbedAnim = afterTime2(null, 0.3);
+  let t2_highlightTokenEmbed = afterTime2(null, 0.8);
+  let t4_highlightPosEmbed = afterTime2(null, 0.8);
+  let t3_moveTokenEmbed = afterTime2(null, 0.8);
+  let t5_movePosEmbed = afterTime2(null, 0.8);
+  let t6_plusSymAnim = afterTime2(null, 0.8);
+  let t7_addAnim = afterTime2(null, 0.8);
+  let t8_placeAnim = afterTime2(null, 0.8);
+  let t9_cleanupInstant = afterTime2(null, 0);
+  let t10_fadeAnim = afterTime2(null, 0.8);
+  let t11_fillRest = afterTime2(null, 5);
+  cleanup2(t9_cleanupInstant, [t3_moveTokenEmbed, t5_movePosEmbed, t6_plusSymAnim, t7_addAnim, t8_placeAnim]);
+  cleanup2(t10_fadeAnim, [t0_splitEmbedAnim, t1_fadeEmbedAnim, t2_highlightTokenEmbed, t4_highlightPosEmbed]);
+  moveCameraTo(state, t_moveCamera, new Vec3(7.6, 0, -33.1), new Vec3(290, 15.5, 0.8));
+  let residCol = null;
+  let exampleIdx = 3;
+  if ((t0_splitEmbedAnim.t > 0 || t10_fadeAnim.t > 0) && t11_fillRest.t === 0) {
+    splitGrid(layout, layout.idxObj, 0 /* X */, exampleIdx + 0.5, t0_splitEmbedAnim.t * 4);
+    layout.residual0.access.disable = true;
+    layout.residual0.opacity = lerp(1, 0.1, t1_fadeEmbedAnim.t);
+    residCol = splitGrid(layout, layout.residual0, 0 /* X */, exampleIdx + 0.5, t0_splitEmbedAnim.t * 4);
+    residCol.highlight = 0.3;
+    residCol.opacity = lerp(1, 0, t1_fadeEmbedAnim.t);
+  }
+  let tokValue = getBlockValueAtIdx(layout.idxObj, new Vec3(exampleIdx, 0, 0)) ?? 1;
+  let tokColDupe = null;
+  let posColDupe = null;
+  if (t2_highlightTokenEmbed.t > 0) {
+    let tokEmbedCol = splitGrid(layout, layout.tokEmbedObj, 0 /* X */, tokValue + 0.5, t2_highlightTokenEmbed.t * 4);
+    tokColDupe = duplicateGrid(layout, tokEmbedCol);
+    tokColDupe.t = "i";
+    tokEmbedCol.highlight = 0.3;
+    let startPos = new Vec3(tokEmbedCol.x, tokEmbedCol.y, tokEmbedCol.z);
+    let targetPos = new Vec3(residCol.x, residCol.y, residCol.z).add(new Vec3(-2, 0, 3));
+    let pos = startPos.lerp(targetPos, t3_moveTokenEmbed.t);
+    tokColDupe.x = pos.x;
+    tokColDupe.y = pos.y;
+    tokColDupe.z = pos.z;
+  }
+  if (t4_highlightPosEmbed.t > 0) {
+    let posEmbedCol = splitGrid(layout, layout.posEmbedObj, 0 /* X */, exampleIdx + 0.5, t4_highlightPosEmbed.t * 4);
+    posColDupe = duplicateGrid(layout, posEmbedCol);
+    posColDupe.t = "i";
+    posEmbedCol.highlight = 0.3;
+    let startPos = new Vec3(posEmbedCol.x, posEmbedCol.y, posEmbedCol.z);
+    let targetPos = new Vec3(residCol.x, residCol.y, residCol.z).add(new Vec3(2, 0, 3));
+    let pos = startPos.lerp(targetPos, t5_movePosEmbed.t);
+    posColDupe.x = pos.x;
+    posColDupe.y = pos.y;
+    posColDupe.z = pos.z;
+  }
+  if (t6_plusSymAnim.t > 0 && tokColDupe && posColDupe && t7_addAnim.t < 1) {
+    for (let c = 0; c < layout.shape.C; c++) {
+      let plusCenter = new Vec3(
+        (tokColDupe.x + tokColDupe.dx + posColDupe.x) / 2,
+        tokColDupe.y + layout.cell * (c + 0.5),
+        tokColDupe.z + tokColDupe.dz / 2
+      );
+      let isActive = t6_plusSymAnim.t > (c + 1) / layout.shape.C;
+      let opacity = lerp(0, 1, isActive ? 1 : 0);
+      let fontOpts = { color: new Vec4(0, 0, 0, 1).mul(opacity), size: 1.5, mtx: Mat4f.fromTranslation(plusCenter) };
+      let w = measureText(render.modelFontBuf, "+", fontOpts);
+      drawText(render.modelFontBuf, "+", -w / 2, -fontOpts.size / 2, fontOpts);
+    }
+  }
+  let origResidPos = residCol ? new Vec3(residCol.x, residCol.y, residCol.z) : new Vec3();
+  let offsetResidPos = origResidPos.add(new Vec3(0, 0, 3));
+  if (t7_addAnim.t > 0 && tokColDupe && posColDupe) {
+    let targetPos = offsetResidPos;
+    let tokStartPos = new Vec3(tokColDupe.x, tokColDupe.y, tokColDupe.z);
+    let posStartPos = new Vec3(posColDupe.x, posColDupe.y, posColDupe.z);
+    let tokPos = tokStartPos.lerp(targetPos, t7_addAnim.t);
+    let posPos = posStartPos.lerp(targetPos, t7_addAnim.t);
+    tokColDupe.x = tokPos.x;
+    tokColDupe.y = tokPos.y;
+    tokColDupe.z = tokPos.z;
+    posColDupe.x = posPos.x;
+    posColDupe.y = posPos.y;
+    posColDupe.z = posPos.z;
+    if (t7_addAnim.t > 0.95) {
+      tokColDupe.opacity = 0;
+      posColDupe.opacity = 0;
+      residCol.opacity = 1;
+      residCol.highlight = 0;
+      residCol.access.disable = false;
+      residCol.x = targetPos.x;
+      residCol.y = targetPos.y;
+      residCol.z = targetPos.z;
+    }
+  }
+  if (t8_placeAnim.t > 0) {
+    let startPos = offsetResidPos;
+    let targetPos = origResidPos;
+    let pos = startPos.lerp(targetPos, t8_placeAnim.t);
+    residCol.x = pos.x;
+    residCol.y = pos.y;
+    residCol.z = pos.z;
+  }
+  if (t9_cleanupInstant.t > 0 && residCol) {
+    residCol.opacity = 1;
+    residCol.highlight = 0;
+    residCol.access.disable = false;
+  }
+  if (t11_fillRest.t > 0) {
+    layout.residual0.access.disable = true;
+    let prevInfo = startProcessBefore(state, layout.residual0);
+    processUpTo(state, t11_fillRest, layout.residual0, prevInfo);
+  }
+  if (t3_moveTokenEmbed.active || t5_movePosEmbed.active || t6_plusSymAnim.active || t7_addAnim.active || t8_placeAnim.active) {
+    setMathCue(state, "embedding_sum");
+  } else if (t4_highlightPosEmbed.active) {
+    setMathCue(state, "embedding_position");
+  } else if (t2_highlightTokenEmbed.active) {
+    setMathCue(state, "embedding_token");
+  }
+}
+
+// features/llm-visualization/upstream/src/llm/walkthrough-develo/DeveloIntro.ts
+function runDeveloIntro(args) {
+  let { afterTime: afterTime2 } = args.tools;
+  let { state, layout, walkthrough: wt } = args;
+  setInitialCamera(state, new Vec3(184.744, 0, -636.82), new Vec3(296, 16, 13.5));
+  if (wt.time > 0) {
+    for (let cube of layout.cubes) {
+      if (cube.t === "i" && cube.access) {
+        cube.access.disable = true;
+      }
+    }
+    state.display.tokenIdxModelOpacity = makeArray(6, 0);
+  }
+  let t4 = afterTime2(null, 1.5, 0.4);
+  moveCameraTo(args.state, t4, new Vec3(5.45, 0, 7.913), new Vec3(281.5, 12.5, 0.519));
+  let t6 = afterTime2(null, 1, 0.2);
+  if (t4.active) {
+    state.display.topOutputOpacity = 0.2;
+  }
+  if (t6.active && t6.t < 1) {
+    let mixes = [0, 0, 0, 0, 0, 0];
+    for (let i = 0; i < 6; i++) {
+      let highT = (i + 1.5) / 8;
+      mixes[i] = 1 - clamp(Math.abs(t6.t - highT) * 4, 0, 1);
+    }
+    state.display.tokenColors = { mixes, color2: dimStyleColor(9 /* Token */) };
+  }
+  let t7 = afterTime2(null, 1.5, 0.5);
+  if (t7.active) {
+    let opacity = makeArray(6, 0);
+    for (let i = 0; i < 6; i++) {
+      let highT = (i + 1.5) / 8;
+      opacity[i] = clamp((t7.t - highT) * 4, 0, 1);
+    }
+    state.display.tokenIdxColors = { mixes: opacity, color2: dimStyleColor(10 /* TokenIdx */) };
+    let idxPos = t7.t * 6;
+    if (t7.t < 1) {
+      splitGrid(layout, layout.idxObj, 0 /* X */, idxPos, clamp(6 - idxPos, 0, 1));
+      for (let blk of findSubBlocks(layout.idxObj, 0 /* X */, null, Math.min(5, Math.floor(idxPos)))) {
+        if (blk.access) {
+          blk.access.disable = false;
+        }
+      }
+    } else {
+      if (layout.idxObj.access) {
+        layout.idxObj.access.disable = false;
+      }
+    }
+  }
+  let t_camMove = afterTime2(null, 1, 0.5);
+  let t_makeVecs = afterTime2(null, 2, 0.5);
+  moveCameraTo(state, t_camMove, new Vec3(14.1, 0, -30.4), new Vec3(286, 14.5, 0.8));
+  if (t_makeVecs.active) {
+    let idxPos = t_makeVecs.t * 6;
+    let splitWidth = clamp(6 - idxPos, 0, 2);
+    let splitIdx = Math.min(5, Math.floor(idxPos));
+    if (t_makeVecs.t < 1) {
+      splitGrid(layout, layout.idxObj, 0 /* X */, idxPos, splitWidth);
+      for (let blk of findSubBlocks(layout.idxObj, 0 /* X */, null, splitIdx)) {
+        if (blk.access) {
+          blk.access.disable = false;
+        }
+      }
+      splitGrid(layout, layout.residual0, 0 /* X */, idxPos, splitWidth);
+      for (let blk of findSubBlocks(layout.residual0, 0 /* X */, null, splitIdx)) {
+        if (blk.access) {
+          blk.access.disable = false;
+        }
+      }
+    } else {
+      if (layout.residual0.access) {
+        layout.residual0.access.disable = false;
+      }
+    }
+  }
+  let t_firstResid = afterTime2(null, 1, 0.5);
+  moveCameraTo(state, t_firstResid, new Vec3(-23.16, 0, -128.38), new Vec3(292.3, 26.8, 2.4));
+  let t_firstResidWalk = afterTime2(null, 5, 0.5);
+  let processState = processUpTo(state, t_firstResidWalk, layout.blocks[0].attnResidual);
+  let t_firstTransformer = afterTime2(null, 1, 0.5);
+  moveCameraTo(state, t_firstTransformer, new Vec3(-78.7, 0, -274.2), new Vec3(299.4, 14.7, 4.3));
+  let t_firstTransformerWalk = afterTime2(null, 3.5, 0.5);
+  processUpTo(state, t_firstTransformerWalk, layout.blocks[0].mlpResidual, processState);
+  if (t_firstTransformer.active) {
+    layout.blocks[0].transformerLabel.visible = t_firstTransformer.t;
+  }
+  let t_fullFrame = afterTime2(null, 1, 0.5);
+  moveCameraTo(state, t_fullFrame, new Vec3(-147, 0, -744.1), new Vec3(298.5, 23.4, 12.2));
+  let t_fullFrameWalk = afterTime2(null, 5, 0.5);
+  processUpTo(state, t_fullFrameWalk, layout.ln_f.lnResid, processState);
+  let t_output = afterTime2(null, 1, 0.5);
+  moveCameraTo(state, t_output, new Vec3(-58.4, 0, -1654.9), new Vec3(271.3, 6.4, 1.1));
+  let t_outputWalk = afterTime2(null, 2, 0.5);
+  processUpTo(state, t_outputWalk, layout.logitsSoftmax, processState);
+  let t_outputToks = afterTime2(null, 1, 0.5);
+  if (t_firstResid.active) {
+    let arr = makeArray(6, 0);
+    if (t_outputToks.active) {
+      for (let i = 0; i < 6; i++) {
+        let highT = (i + 1.5) / 8;
+        arr[i] = clamp((t_outputToks.t - highT) * 4, 0, 1);
+      }
+    }
+    state.display.tokenOutputColors = { color1: new Vec4(0, 0, 0, 0), color2: Vec4.fromHexColor("#000", 1), mixes: arr };
+  }
+  if (t_firstResid.active) {
+    setMathCue(state, "intro_flow");
+  } else if (t_makeVecs.active || t_camMove.active) {
+    setMathCue(state, "intro_embedding");
+  } else if (t7.active) {
+    setMathCue(state, "intro_indices");
+  } else if (t6.active) {
+    setMathCue(state, "intro_tokens");
+  }
+}
+
+// features/llm-visualization/upstream/src/llm/walkthrough-develo/DeveloLayerNorm.ts
+function runDeveloLayerNorm(args) {
+  let { walkthrough: wt, layout, state, tools: { afterTime: afterTime2, cleanup: cleanup2 } } = args;
+  let { C } = layout.shape;
+  let ln = layout.blocks[0].ln1;
+  setInitialCamera(state, new Vec3(-6.68, 0, -65.256), new Vec3(281, 9, 2.576));
+  wt.dimHighlightBlocks = [layout.residual0, ...ln.cubes];
+  let t_moveCamera = afterTime2(null, 1);
+  let t_hideExtra = afterTime2(null, 1, 1);
+  let t_moveInputEmbed = afterTime2(null, 1);
+  let t_moveCameraClose = afterTime2(null, 0.5);
+  let t_focusColumn = afterTime2(null, 0.5);
+  let t_calcMuAgg = afterTime2(null, 0.5);
+  let t_calcVarAgg = afterTime2(null, 0.5);
+  let t_clean_aggs = afterTime2(null, 0.2);
+  cleanup2(t_clean_aggs, [t_calcMuAgg, t_calcVarAgg]);
+  let t_colSequence = afterTime2(null, 2);
+  let t_cleanupSplits = afterTime2(null, 0.5);
+  cleanup2(t_cleanupSplits, [t_focusColumn]);
+  if (t_cleanupSplits.t > 0) {
+    t_colSequence.t = 0;
+  }
+  let t_runAggFull = afterTime2(null, 2);
+  let t_runNormFull = afterTime2(null, 6);
+  moveCameraTo(state, t_moveCamera, new Vec3(21.2, 0, -102.9), new Vec3(281.5, 11, 1.7));
+  let exampleIdx = 3;
+  let ln1 = layout.blocks[0].ln1;
+  let inputBlock = layout.residual0;
+  inputBlock.highlight = lerp(0, 0.3, t_hideExtra.t);
+  let relevantBlocks = /* @__PURE__ */ new Set([
+    layout.residual0,
+    ...ln1.cubes
+  ]);
+  for (let blk of layout.cubes) {
+    if (!relevantBlocks.has(blk)) {
+      blk.opacity = lerp(1, 0, t_hideExtra.t);
+    }
+  }
+  for (let blk of relevantBlocks) {
+    if (blk != layout.residual0 && blk.t !== "w") {
+      blk.access.disable = true;
+    }
+  }
+  let startResidualY = layout.residual0.y;
+  let endResidulY = ln1.lnResid.y;
+  layout.residual0.y = lerp(startResidualY, endResidulY, t_moveInputEmbed.t);
+  if (t_moveInputEmbed.t >= 0) {
+    inputBlock.highlight = lerp(0.3, 0, t_moveInputEmbed.t);
+  }
+  moveCameraTo(state, t_moveCameraClose, new Vec3(-14.1, 0, -187.1), new Vec3(270, 4, 0.7));
+  let splitAmt = lerp(0, 2, t_focusColumn.t);
+  let splitPos = exampleIdx + 0.5;
+  let otherColOpacity = lerp(1, 0.3, t_focusColumn.t);
+  ln1.lnAgg1.opacity = otherColOpacity;
+  ln1.lnAgg2.opacity = otherColOpacity;
+  ln1.lnResid.opacity = otherColOpacity;
+  inputBlock.opacity = otherColOpacity;
+  if (t_focusColumn.t > 0) {
+    let aggMuCol = splitGrid(layout, ln1.lnAgg1, 0 /* X */, splitPos, splitAmt);
+    let aggVarCol = splitGrid(layout, ln1.lnAgg2, 0 /* X */, splitPos, splitAmt);
+    let residCol = splitGrid(layout, ln1.lnResid, 0 /* X */, splitPos, splitAmt);
+    let inputCol = splitGrid(layout, inputBlock, 0 /* X */, splitPos, splitAmt);
+    aggMuCol.opacity = 1;
+    aggVarCol.opacity = 1;
+    residCol.opacity = 1;
+    inputCol.opacity = 1;
+    let aggDestIdx = new Vec3(exampleIdx, 0, 0);
+    if (t_calcMuAgg.t > 0) {
+      let pinIdx = new Vec3(0, 10, 0);
+      drawDependences(state, ln1.lnAgg1, aggDestIdx);
+      drawDataFlow(state, ln1.lnAgg1, aggDestIdx, pinIdx);
+      aggMuCol.access.disable = false;
+      inputCol.highlight = 0.3;
+    }
+    if (t_calcVarAgg.t > 0) {
+      let pinIdx = new Vec3(9, 9, 0);
+      drawDependences(state, ln1.lnAgg2, aggDestIdx);
+      drawDataFlow(state, ln1.lnAgg2, aggDestIdx, pinIdx);
+      aggVarCol.access.disable = false;
+    }
+    if (t_colSequence.t > 0) {
+      aggMuCol.access.disable = false;
+      aggVarCol.access.disable = false;
+      let pinIdx = new Vec3(-10, 0, 0);
+      let cPos = t_colSequence.t * C;
+      let cIdx = clamp(Math.floor(cPos), 0, C - 1);
+      let destIdx = new Vec3(exampleIdx, cIdx, 0);
+      drawDependences(state, ln1.lnResid, destIdx);
+      drawDataFlow(state, ln1.lnResid, destIdx, pinIdx);
+      let targetCell = splitGrid(layout, residCol, 1 /* Y */, cIdx + 0.5, 0);
+      targetCell.highlight = 0.3;
+      findSubBlocks(residCol, 1 /* Y */, 0, cIdx).forEach((blk) => {
+        blk.access.disable = false;
+      });
+    }
+  }
+  if (t_runAggFull.t > 0) {
+    try {
+      let processInfo = startProcessBefore(state, ln1.lnAgg1);
+      processUpTo(state, t_runAggFull, ln1.lnAgg2, processInfo);
+      processUpTo(state, t_runNormFull, ln1.lnResid, processInfo);
+    } catch (e) {
+      console.log(e);
+    }
+  }
+  if (t_runAggFull.active || t_runNormFull.active) {
+    setMathCue(state, "layernorm_affine");
+  } else if (t_colSequence.active) {
+    setMathCue(state, "layernorm_normalize");
+  } else if (t_calcVarAgg.active) {
+    setMathCue(state, "layernorm_variance");
+  } else if (t_calcMuAgg.active) {
+    setMathCue(state, "layernorm_mean");
+  }
+}
+
+// features/llm-visualization/upstream/src/llm/walkthrough-develo/DeveloMlp.ts
+function runDeveloMlp(args) {
+  let { walkthrough: wt, state, layout, tools: { afterTime: afterTime2, cleanup: cleanup2 } } = args;
+  let block = layout.blocks[0];
+  setInitialCamera(state, new Vec3(-154.755, 0, -460.042), new Vec3(289.1, -8.9, 2.298));
+  wt.dimHighlightBlocks = [block.ln2.lnResid, block.mlpAct, block.mlpFc, block.mlpFcBias, block.mlpFcWeight, block.mlpProjBias, block.mlpProjWeight, block.mlpResult, block.mlpResidual];
+  let t0_fadeOut = afterTime2(null, 1);
+  let t1_process = afterTime2(null, 3);
+  let t2_process = afterTime2(null, 3);
+  let t3_process = afterTime2(null, 3);
+  let t4_process = afterTime2(null, 3);
+  let t5_cleanup = afterTime2(null, 1, 0.5);
+  cleanup2(t5_cleanup, [t0_fadeOut]);
+  let t6_processAll = afterTime2(null, 6);
+  let targetIdx = 3;
+  let inputBlk = block.ln2.lnResid;
+  let mlp1Blk = block.mlpFc;
+  let mlp2Blk = block.mlpAct;
+  let mlpRes = block.mlpResult;
+  let mlpResid = block.mlpResidual;
+  function dimExceptVector(blk, axis, disable) {
+    if (t0_fadeOut.t === 0 || t6_processAll.t > 0) {
+      return;
+    }
+    if (disable) {
+      blk.access.disable = true;
+    }
+    let col = splitGrid(layout, blk, axis, targetIdx + 0.5, lerp(0, 1, t0_fadeOut.t));
+    for (let sub of blk.subs) {
+      sub.opacity = lerp(1, 0.2, t0_fadeOut.t);
+    }
+    col.opacity = 1;
+    return col;
+  }
+  dimExceptVector(inputBlk, 0 /* X */, false);
+  let mlp1Col = dimExceptVector(mlp1Blk, 1 /* Y */, true);
+  let mlp2Col = dimExceptVector(mlp2Blk, 1 /* Y */, true);
+  let mlpResCol = dimExceptVector(mlpRes, 0 /* X */, true);
+  let mplResIdCol = dimExceptVector(mlpResid, 0 /* X */, true);
+  function processVector(blk, col, t, pinIdx) {
+    if (t === 0) {
+      return;
+    }
+    let dim0 = blk.transpose ? 1 /* Y */ : 0 /* X */;
+    let dim1 = blk.transpose ? 0 /* X */ : 1 /* Y */;
+    let { cx: numCells } = dimProps(blk, dim1);
+    let xPos = Math.floor(lerp(0, numCells, t));
+    let destIdx = new Vec3().setAt(dim0, targetIdx).setAt(dim1, xPos).round_();
+    if (col) {
+      let row = splitGrid(layout, col, dim1, xPos, 0);
+      for (let a of findSubBlocks(col, dim1, 0, xPos)) {
+        a.access.disable = false;
+      }
+    }
+    if (t < 1) {
+      drawDataFlow(state, blk, destIdx, pinIdx);
+      drawDependences(state, blk, destIdx);
+    } else if (col) {
+      col.access.disable = false;
+    }
+  }
+  processVector(mlp1Blk, mlp1Col, t1_process.t, new Vec3(40));
+  processVector(mlp2Blk, mlp2Col, t2_process.t, new Vec3(mlp1Blk.cx / 2, -15));
+  processVector(mlpRes, mlpResCol, t3_process.t, new Vec3(mlpRes.cx / 2, -15));
+  processVector(mlpResid, mplResIdCol, t4_process.t, new Vec3(mlpRes.cx / 2, -15));
+  if (t5_cleanup.t > 0.4) {
+    mlp1Blk.access.disable = true;
+    mlp2Blk.access.disable = true;
+    mlpRes.access.disable = true;
+    mlpResid.access.disable = true;
+  }
+  if (t6_processAll.t > 0) {
+    let prevInfo = startProcessBefore(state, inputBlk);
+    processUpTo(state, t6_processAll, mlpResid, prevInfo);
+  }
+  if (t4_process.active) {
+    setMathCue(state, "mlp_residual");
+  } else if (t3_process.active) {
+    setMathCue(state, "mlp_project");
+  } else if (t2_process.active) {
+    setMathCue(state, "mlp_gelu");
+  } else if (t1_process.active) {
+    setMathCue(state, "mlp_expand");
+  } else if (t0_fadeOut.active) {
+    setMathCue(state, "mlp_norm");
+  }
+}
+
+// features/llm-visualization/upstream/src/llm/walkthrough-develo/DeveloOutput.ts
+function runDeveloOutput(args) {
+  let { walkthrough: wt, state, layout, tools: { afterTime: afterTime2 } } = args;
+  setInitialCamera(state, new Vec3(-20.203, 0, -1642.819), new Vec3(281.6, -7.9, 2.298));
+  let t_finalNorm = afterTime2(null, 0.8);
+  let t_logits = afterTime2(null, 0.8);
+  let t_probabilities = afterTime2(null, 1.2);
+  let t_nextToken = afterTime2(null, 1.2);
+  let processInfo = startProcessBefore(state, layout.ln_f.lnResid);
+  if (t_finalNorm.active) {
+    processUpTo(state, t_finalNorm, layout.ln_f.lnResid, processInfo);
+    setMathCue(state, "output_final_norm");
+  }
+  if (t_logits.active) {
+    processUpTo(state, t_logits, layout.logits, processInfo);
+    setMathCue(state, "output_logits");
+  }
+  if (t_probabilities.active) {
+    processUpTo(state, t_probabilities, layout.logitsSoftmax, processInfo);
+    setMathCue(state, "output_probabilities");
+  }
+  if (t_nextToken.active) {
+    setMathCue(state, "output_argmax");
+    if (t_nextToken.t >= 0.5) {
+      let phaseLocal = wt.phaseData.get(wt.phase) ?? {};
+      if (!phaseLocal.predictionStepped) {
+        phaseLocal.predictionStepped = true;
+        wt.phaseData.set(wt.phase, phaseLocal);
+        state.stepModel = true;
+      }
+    }
+  }
+}
+
+// features/llm-visualization/upstream/src/llm/walkthrough-develo/DeveloProjection.ts
+function runDeveloProjection(args) {
+  let { walkthrough: wt, state, layout, tools: { afterTime: afterTime2, cleanup: cleanup2 } } = args;
+  setInitialCamera(state, new Vec3(-73.167, 0, -270.725), new Vec3(293.606, 2.613, 1.366));
+  let block = layout.blocks[0];
+  wt.dimHighlightBlocks = [...block.heads.map((h) => h.vOutBlock), block.projBias, block.projWeight, block.attnOut];
+  let t_fadeOut = afterTime2(null, 1, 0.5);
+  let t_stack = afterTime2(null, 1);
+  let t_process = afterTime2(null, 3);
+  let t_zoomOut = afterTime2(null, 1, 0.5);
+  let t_processResid = afterTime2(null, 3);
+  cleanup2(t_zoomOut, [t_fadeOut, t_stack]);
+  if (t_fadeOut.active) {
+    for (let head of block.heads) {
+      for (let blk of head.cubes) {
+        if (blk !== head.vOutBlock) {
+          blk.opacity = lerpSmoothstep(1, 0, t_fadeOut.t);
+        }
+      }
+    }
+  }
+  if (t_stack.active) {
+    let targetZ = block.attnOut.z;
+    for (let headIdx = 0; headIdx < block.heads.length; headIdx++) {
+      let head = block.heads[headIdx];
+      let targetY = head.vOutBlock.y + head.vOutBlock.dy * (headIdx - block.heads.length + 1);
+      head.vOutBlock.y = lerp(head.vOutBlock.y, targetY, t_stack.t);
+      head.vOutBlock.z = lerp(head.vOutBlock.z, targetZ, t_stack.t);
+    }
+  }
+  let processInfo = startProcessBefore(state, block.attnOut);
+  if (t_process.active) {
+    processUpTo(state, t_process, block.attnOut, processInfo);
+  }
+  moveCameraTo(state, t_zoomOut, new Vec3(-8.304, 0, -175.482), new Vec3(293.606, 2.623, 2.618));
+  if (t_processResid.active) {
+    processUpTo(state, t_processResid, block.attnResidual, processInfo);
+  }
+  if (t_processResid.active) {
+    setMathCue(state, "projection_residual");
+  } else if (t_process.active) {
+    setMathCue(state, "projection_linear");
+  } else if (t_stack.active) {
+    setMathCue(state, "projection_concat");
+  }
+}
+
+// features/llm-visualization/upstream/src/llm/walkthrough-develo/DeveloSelfAttention.ts
+var Black = new Vec4(0, 0, 0);
+function runDeveloSelfAttention(args) {
+  let { walkthrough: wt, layout, state, tools: { afterTime: afterTime2, cleanup: cleanup2 } } = args;
+  let { C, A, nHeads } = layout.shape;
+  let block0 = layout.blocks[0];
+  let head2 = block0.heads[2];
+  setInitialCamera(state, new Vec3(-125.258, 0, -178.805), new Vec3(294, 12.8, 2.681));
+  wt.dimHighlightBlocks = [layout.residual0, block0.ln1.lnResid, ...head2.cubes];
+  let t_moveCamera = afterTime2(null, 1);
+  let t_highlightHeads = afterTime2(null, 2);
+  let t_moveCamera2 = afterTime2(null, 1);
+  let t_focusHeads = focusSelfAttentionHeadTimers(args, 3);
+  let t_focusQCol = afterTime2(null, 1);
+  let t_qIterColDot = afterTime2(null, 3);
+  let t_moveDotCells = afterTime2(null, 2, 0.5);
+  let t_dotCellsZoomClose = afterTime2(null, 1, 0.5);
+  let t_collapseDotCellsA = afterTime2(null, 2);
+  let t_collapseDotCellsB = afterTime2(null, 2, 0.5);
+  let t_dotCellsZoomOut = afterTime2(null, 1, 0.5);
+  let t_addBias = afterTime2(null, 2, 0.5);
+  let t_moveToDest = afterTime2(null, 0.5);
+  let t_revertFocusCol = afterTime2(null, 0.25, 0.5);
+  cleanup2(t_revertFocusCol, [t_focusQCol]);
+  let t_processQkv = afterTime2(null, 5);
+  let t_focusQKVCols = afterTime2(null, 1);
+  let t_processAttnRow = afterTime2(null, 3);
+  let t_processAttnSmAggRow = afterTime2(null, 1);
+  let t_processAttnSmRow = afterTime2(null, 2);
+  let t_zoomVOutput = afterTime2(null, 0.4, 0.5);
+  let t_expandVCols = afterTime2(null, 1, 0.5);
+  let t_moveAttnVals = afterTime2(null, 1, 0.5);
+  let t_applyMultiplies = afterTime2(null, 1, 0.5);
+  let t_applyAdds = afterTime2(null, 1, 0.5);
+  let t_placeVOutput = afterTime2(null, 1, 0.5);
+  let t_finalizeVOutput = afterTime2(null, 0.5, 0.5);
+  let t_processRemainZoom = afterTime2(null, 0.5, 0.5);
+  cleanup2(t_processRemainZoom, [t_focusQKVCols]);
+  let t_processRemain = afterTime2(null, 8);
+  moveCameraTo(state, t_moveCamera, new Vec3(-192.1, 0, -214.8), new Vec3(293.5, 49, 2.3));
+  moveCameraTo(state, t_moveCamera2, new Vec3(-92.7, 0, -219), new Vec3(286, 12.8, 1.4));
+  if (t_highlightHeads.t > 0) {
+    block0.selfAttendLabel.visible = lerp(0, 1, t_highlightHeads.t * 10);
+    let headPos = t_highlightHeads.t * nHeads;
+    let headIdx = clamp(Math.floor(headPos), 0, nHeads - 1);
+    let headFrac = headPos - headIdx;
+    let labelOpacity = lerp(0, 1, headFrac / 0.3);
+    let head = block0.heads[headIdx];
+    head.headLabel.visible = labelOpacity;
+    for (let blk of head.headLabel.cubes) {
+      blk.highlight = labelOpacity * 0.4;
+    }
+  }
+  if (t_focusHeads.t0_dissolveHeads.t > 0) {
+    let head = block0.heads[2];
+    let t = t_focusHeads.t0_dissolveHeads.t;
+    for (let blk of head.headLabel.cubes) {
+      blk.highlight = lerp(1, 0, t * 4) * 0.4;
+    }
+    head2.qBlock.access.disable = true;
+    head2.kBlock.access.disable = true;
+    head2.vBlock.access.disable = true;
+  }
+  focusSelfAttentionHead(args, t_focusHeads);
+  moveCameraTo(state, t_dotCellsZoomClose, new Vec3(-53, 0, -155.5), new Vec3(274.1, 8.5, 0.4));
+  moveCameraTo(state, t_dotCellsZoomOut, new Vec3(-92.7, 0, -219), new Vec3(286, 12.8, 1.4));
+  let exampleIdx = 3;
+  if (t_focusQCol.t > 0) {
+    let otherOpacity = lerp(1, 0.2, t_focusQCol.t);
+    head2.qBlock.opacity = otherOpacity;
+    head2.kBlock.opacity = otherOpacity;
+    head2.vBlock.opacity = otherOpacity;
+    block0.ln1.lnResid.opacity = otherOpacity;
+    let splitAmt = lerp(0, 2, t_focusQCol.t);
+    let qCol = splitGrid(layout, head2.qBlock, 0 /* X */, exampleIdx + 0.5, splitAmt);
+    let inputCol = splitGrid(layout, block0.ln1.lnResid, 0 /* X */, exampleIdx + 0.5, splitAmt);
+    qCol.opacity = 1;
+    inputCol.opacity = 1;
+    if (t_qIterColDot.t > 0) {
+      let aPos = t_qIterColDot.t * A;
+      let aIdx = clamp(Math.floor(aPos), 0, A - 1);
+      let destIdx = new Vec3(exampleIdx, aIdx, 0);
+      let pinIdx = new Vec3(exampleIdx, 0, 0);
+      drawDependences(state, head2.qBlock, destIdx);
+      drawDataFlow(state, head2.qBlock, destIdx, pinIdx);
+      splitGrid(layout, qCol, 1 /* Y */, aIdx + 0.5, 0);
+      for (let b of findSubBlocks(qCol, 1 /* Y */, null, aIdx)) {
+        b.access.disable = false;
+      }
+      inputCol.highlight = 0.3;
+    }
+    let targetTop = new Vec3(inputCol.x - 26, inputCol.y, inputCol.z + 5);
+    let addTarget = new Vec3(targetTop.x + layout.cell, targetTop.y - layout.cell * 12, targetTop.z);
+    let biasTarget = new Vec3(addTarget.x - layout.cell * 3, addTarget.y, addTarget.z);
+    if (t_moveDotCells.t > 0 && t_moveToDest.t === 0) {
+      let qWeightRow = findSubBlocks(head2.qWeightBlock, 1 /* Y */, A - 1, null)[0];
+      let qCells = splitGridAll(layout, qWeightRow, 0 /* X */);
+      let inCells = splitGridAll(layout, inputCol, 1 /* Y */);
+      let cellMovePct = 0.5;
+      let prevCY = 0;
+      for (let c = 0; c < C; c++) {
+        let cPos = c / (C - 1);
+        let startT = (1 - cellMovePct) * (1 - cPos);
+        let cellMoveT = inverseLerp(startT, startT + cellMovePct, t_moveDotCells.t);
+        let qInitial = getBlkDimensions(qCells[c]);
+        let qFinal = targetTop.add(new Vec3(0, c * layout.cell * 1.2));
+        let inInitial = getBlkDimensions(inCells[c]);
+        let inFinal = targetTop.add(new Vec3(layout.cell * 2, c * layout.cell * 1.2));
+        if (t_dotCellsZoomOut.t > 0) {
+          qFinal = inFinal = new Vec3(targetTop.x + layout.cell, targetTop.y - layout.cell * 12, qFinal.z);
+        }
+        setBlkPosition(qCells[c], qInitial.tl.lerp(qFinal, cellMoveT));
+        setBlkPosition(inCells[c], inInitial.tl.lerp(inFinal, cellMoveT));
+        let transitionPt = 0.15;
+        let collapsDotCellsT = lerp(0, transitionPt, t_collapseDotCellsA.t) + lerp(0, 1 - transitionPt, t_collapseDotCellsB.t);
+        let startT2 = 0.9 * cPos;
+        let cellTimesSymT = inverseLerp(startT2, startT2 + 0.1, collapsDotCellsT);
+        if (cellTimesSymT > 0 && t_dotCellsZoomOut.t == 0) {
+          let qCurr = getBlkDimensions(qCells[c]);
+          let inCurr = getBlkDimensions(inCells[c]);
+          let qCellPos = new Vec3(
+            lerp(qCurr.tl.x, addTarget.x, cellTimesSymT * 2),
+            lerp(qCurr.tl.y, addTarget.y, cellTimesSymT),
+            qCurr.tl.z
+          );
+          let inCellPos = new Vec3(
+            lerp(inCurr.tl.x, addTarget.x, cellTimesSymT * 2),
+            lerp(inCurr.tl.y, addTarget.y, cellTimesSymT),
+            qCurr.tl.z
+          );
+          setBlkPosition(qCells[c], qCellPos);
+          setBlkPosition(inCells[c], inCellPos);
+          if (c > 0 && cellTimesSymT > 0) {
+            let midPt = new Vec3(
+              lerp(qCurr.br.x, inCurr.tl.x, 0.5),
+              lerp(prevCY, qCellPos.y, 0.5),
+              qCurr.tl.z + layout.cell / 2
+            );
+            let mtx = Mat4f.fromTranslation(midPt);
+            let fontOpts = { color: Black, size: 1.5, mtx };
+            let w = measureText(state.render.modelFontBuf, "+", fontOpts);
+            drawText(state.render.modelFontBuf, "+", -w / 2, -fontOpts.size / 2, fontOpts);
+          }
+          prevCY = qCellPos.y + layout.cell;
+        }
+        if (cellMoveT >= 1) {
+          drawSymbolBetweenBlocks(args, qCells[c], inCells[c], 0 /* X */, "x", { size: 1.5, color: Black });
+        }
+      }
+      if (t_addBias.t >= 0) {
+        let qBiasCell = findSubBlocks(head2.qBiasBlock, 1 /* Y */, A - 1, null)[0];
+        let qBiasInitial = getBlkDimensions(qBiasCell);
+        let qBiasPos = qBiasInitial.tl.lerp(biasTarget, inverseLerp(0, 0.4, t_addBias.t));
+        setBlkPosition(qBiasCell, qBiasPos);
+        let moveTogetherT = inverseLerp(0.6, 1, t_addBias.t);
+        qBiasInitial = getBlkDimensions(qBiasCell);
+        qBiasPos = qBiasInitial.tl.lerp(addTarget, moveTogetherT);
+        setBlkPosition(qBiasCell, qBiasPos);
+        if (t_addBias.t > 0.4) {
+          drawSymbolBetweenBlocks(args, qBiasCell, qCells[qCells.length - 1], 0 /* X */, "+", { size: 1.5, color: Black });
+        }
+      }
+    }
+    if (t_moveToDest.t > 0) {
+      let qWeightRow = findSubBlocks(head2.qWeightBlock, 1 /* Y */, A - 1, null)[0];
+      let qBiasCell = findSubBlocks(head2.qBiasBlock, 1 /* Y */, A - 1, null)[0];
+      qBiasCell.opacity = t_moveToDest.t;
+      qWeightRow.opacity = t_moveToDest.t;
+      inputCol.opacity = t_moveToDest.t;
+      let qResultCell = findSubBlocks(qCol, 1 /* Y */, A - 1, null)[0];
+      let qResultInitial = getBlkDimensions(qResultCell);
+      let qResultPos = qResultInitial.tl.lerp(addTarget, 1 - t_moveToDest.t);
+      setBlkPosition(qResultCell, qResultPos);
+    }
+  }
+  if (t_processQkv.t > 0) {
+    let processStart = startProcessBefore(state, head2.qBlock);
+    processUpTo(state, t_processQkv, head2.vBlock, processStart);
+  }
+  let attnExampleIdx = 5;
+  if (t_focusQKVCols.t > 0 && t_processRemain.t <= 0) {
+    let ignoreOpacity = lerp(1, 0.2, t_focusQKVCols.t);
+    head2.qBlock.opacity = ignoreOpacity;
+    head2.kBlock.opacity = ignoreOpacity;
+    head2.vBlock.opacity = ignoreOpacity;
+    let qCol = splitGrid(layout, head2.qBlock, 0 /* X */, attnExampleIdx + 0.5, 0);
+    splitGrid(layout, head2.kBlock, 0 /* X */, attnExampleIdx + 0.5, 0);
+    splitGrid(layout, head2.vBlock, 0 /* X */, attnExampleIdx + 0.5, 0);
+    let kBeforeCols = findSubBlocks(head2.kBlock, 0 /* X */, null, attnExampleIdx);
+    let vBeforeCols = findSubBlocks(head2.vBlock, 0 /* X */, null, attnExampleIdx);
+    for (let col of [...kBeforeCols, ...vBeforeCols, qCol]) {
+      col.opacity = 1;
+    }
+    head2.attnMtx.access.disable = true;
+    head2.attnMtxSm.access.disable = true;
+    head2.attnMtxAgg1.access.disable = true;
+    head2.attnMtxAgg2.access.disable = true;
+    head2.qBlock.opacity = 1;
+    head2.kBlock.opacity = 1;
+    head2.vBlock.opacity = 1;
+  }
+  moveCameraTo(state, t_focusQKVCols, new Vec3(-91.5, 0, -227.9), new Vec3(270.1, -38.4, 0.8));
+  if (t_processAttnRow.t > 0 && t_processRemain.t <= 0) {
+    let aIdx = clamp(Math.floor(t_processAttnRow.t * (attnExampleIdx + 1)), 0, attnExampleIdx);
+    let destIdx = new Vec3(aIdx, attnExampleIdx, 0);
+    let pinIdx = new Vec3(attnExampleIdx, 0, 0);
+    if (t_processAttnSmAggRow.t <= 0) {
+      drawDependences(state, head2.attnMtx, destIdx);
+      drawDataFlow(state, head2.attnMtx, destIdx, pinIdx);
+    }
+    let attnRow = splitGrid(layout, head2.attnMtx, 1 /* Y */, attnExampleIdx, 0);
+    splitGrid(layout, attnRow, 0 /* X */, aIdx, 0);
+    let attnRowStart = findSubBlocks(attnRow, 0 /* X */, null, aIdx);
+    for (let blk of attnRowStart) {
+      blk.access.disable = false;
+    }
+  }
+  if (t_processAttnSmAggRow.t > 0 && t_processRemain.t <= 0) {
+    let agg0T = inverseLerp(0, 0.5, t_processAttnSmAggRow.t);
+    let agg1T = inverseLerp(0.5, 1, t_processAttnSmAggRow.t);
+    let hidePopup = t_processAttnSmRow.t > 0;
+    processDim(state, head2.attnMtxAgg2, 1 /* Y */, attnExampleIdx, agg0T, { pinIdx: new Vec3(5, 0, 0), clamp: true, hidePopup });
+    if (agg1T > 0) {
+      processDim(state, head2.attnMtxAgg1, 1 /* Y */, attnExampleIdx, agg1T, { pinIdx: new Vec3(-12, 0, 0), clamp: true, hidePopup });
+    }
+  }
+  if (t_processAttnSmRow.t > 0 && t_processRemain.t <= 0) {
+    let hidePopup = t_zoomVOutput.t > 0;
+    processDim(state, head2.attnMtxSm, 1 /* Y */, attnExampleIdx, t_processAttnSmRow.t, { pinIdx: new Vec3(5, 0, 0), clamp: true, maxIdx: attnExampleIdx + 1, hidePopup });
+  }
+  if (t_zoomVOutput.t > 0 && t_processRemain.t <= 0) {
+    head2.vOutBlock.access.disable = true;
+  }
+  {
+    moveCameraTo(state, t_zoomVOutput, new Vec3(-91.9, 0, -267.9), new Vec3(270.1, -7.5, 0.7));
+    let topLeftPos = getBlkDimensions(head2.vBlock).tl.add(new Vec3(0, 4, 5));
+    let midLeftPos = topLeftPos.add(new Vec3(0, layout.cell * (A / 2 - 0.5)));
+    if (t_expandVCols.t > 0 && t_placeVOutput.t <= 0) {
+      let allVCols = [];
+      let vBeforeCols = findSubBlocks(head2.vBlock, 0 /* X */, null, attnExampleIdx);
+      for (let col of vBeforeCols) {
+        allVCols.push(...splitGridAll(layout, col, 0 /* X */));
+      }
+      let allAttnCells = [];
+      let attnRow = findSubBlocks(head2.attnMtxSm, 1 /* Y */, attnExampleIdx, attnExampleIdx)[0];
+      let attnCellsBefore = findSubBlocks(attnRow, 0 /* X */, null, attnExampleIdx);
+      for (let cell of attnCellsBefore) {
+        for (let subCell of splitGridAll(layout, cell, 0 /* X */)) {
+          allAttnCells.push(duplicateGrid(layout, subCell));
+        }
+      }
+      for (let i = 0; i < attnExampleIdx + 1; i++) {
+        let attnVal = getBlockValueAtIdx(head2.attnMtxSm, new Vec3(i, attnExampleIdx, 0)) ?? 0.2;
+        let initColPos = getBlkDimensions(allVCols[i]).tl;
+        let destColPos = topLeftPos.add(new Vec3(i * layout.cell * 5, 0, 0));
+        setBlkPosition(allVCols[i], initColPos.lerp(destColPos, t_expandVCols.t));
+        let initAttnPos = getBlkDimensions(allAttnCells[i]).tl;
+        let destAttnPos = midLeftPos.add(new Vec3(i * layout.cell * 5 - 2 * layout.cell, 0));
+        setBlkPosition(allAttnCells[i], initAttnPos.lerp(destAttnPos, t_moveAttnVals.t));
+        if (t_applyMultiplies.t > 0) {
+          initAttnPos = destAttnPos;
+          destAttnPos = initAttnPos.add(new Vec3(layout.cell * 2, 0));
+          setBlkPosition(allAttnCells[i], initAttnPos.lerp(destAttnPos, t_applyMultiplies.t));
+          allAttnCells[i].opacity = 1 - t_applyMultiplies.t;
+          allVCols[i].highlight = lerp(0, attnVal * 1.5, t_applyMultiplies.t);
+        }
+        if (t_moveAttnVals.t > 0.8 && t_applyMultiplies.t < 0.7) {
+          drawSymbolBetweenBlocks(args, allVCols[i], allAttnCells[i], 0 /* X */, "x", { color: Black, size: 1.5 });
+        }
+        if (t_applyAdds.t > 0) {
+          initColPos = destColPos;
+          destColPos = topLeftPos.add(new Vec3(0, 0, attnVal * 1));
+          setBlkPosition(allVCols[i], initColPos.lerp(destColPos, t_applyAdds.t));
+        }
+        if (t_applyMultiplies.t > 0.6 && i > 0 && t_applyAdds.t < 0.7) {
+          drawSymbolBetweenBlocks(args, allVCols[i - 1], allVCols[i], 0 /* X */, "+", { color: Black, size: 1.5 });
+        }
+      }
+    }
+    if (t_placeVOutput.t > 0 && t_finalizeVOutput.t <= 0) {
+      let prepareT = inverseLerp(0, 0.5, t_placeVOutput.t);
+      let vOutCol = splitGrid(layout, head2.vOutBlock, 0 /* X */, attnExampleIdx + 0.5, prepareT * 2);
+      vOutCol.access.disable = true;
+      vOutCol.opacity = lerp(1, 0, prepareT);
+      for (let col of findSubBlocks(head2.vBlock, 0 /* X */, null, attnExampleIdx)) {
+        col.opacity = t_placeVOutput.t;
+      }
+      let vOutColDupe = duplicateGrid(layout, vOutCol);
+      vOutColDupe.access.disable = false;
+      vOutColDupe.opacity = 1;
+      let colInitialPos = topLeftPos;
+      let colFinalPos = getBlkDimensions(vOutCol).tl;
+      setBlkPosition(vOutColDupe, colInitialPos.lerp(colFinalPos, t_placeVOutput.t));
+    }
+    if (t_finalizeVOutput.t > 0) {
+      let splitAmt = lerp(1, 0, t_finalizeVOutput.t) * 2;
+      let vOutCol = splitGrid(layout, head2.vOutBlock, 0 /* X */, attnExampleIdx + 0.5, splitAmt);
+      vOutCol.access.disable = false;
+    }
+  }
+  moveCameraTo(state, t_processRemainZoom, new Vec3(-99.7, 0, -230.1), new Vec3(275.6, -4.4, 1.2));
+  if (t_processRemain.t > 0) {
+    for (let blk of [head2.attnMtx, head2.attnMtxSm, head2.attnMtxAgg1, head2.attnMtxAgg2, head2.vOutBlock]) {
+      blk.access.disable = true;
+    }
+    let processStart = startProcessBefore(state, head2.attnMtx);
+    processUpTo(state, t_processRemain, head2.vOutBlock, processStart);
+  }
+  if (t_zoomVOutput.active || t_expandVCols.active || t_applyMultiplies.active || t_applyAdds.active || t_placeVOutput.active) {
+    setMathCue(state, "attention_weighted_value");
+  } else if (t_processAttnSmAggRow.active || t_processAttnSmRow.active) {
+    setMathCue(state, "attention_softmax");
+  } else if (t_processAttnRow.active) {
+    setMathCue(state, "attention_score");
+  } else if (t_focusQKVCols.active) {
+    setMathCue(state, "attention_mask");
+  } else if (t_moveDotCells.active || t_collapseDotCellsA.active || t_collapseDotCellsB.active || t_addBias.active) {
+    setMathCue(state, "attention_dot");
+  } else if (t_focusQCol.active || t_qIterColDot.active || t_processQkv.active) {
+    setMathCue(state, "attention_qkv");
+  }
+}
+function inverseLerp(edge0, edge1, t) {
+  return (clamp(t, edge0, edge1) - edge0) / (edge1 - edge0);
+}
+function processDim(state, block, dim, destIdx, t, options = {}) {
+  let { layout } = state;
+  let { pinIdx, clamp: keep, maxIdx, hidePopup } = options;
+  let otherDim = dim === 0 /* X */ ? 1 /* Y */ : 0 /* X */;
+  let { cx: cxOther } = dimProps(block, otherDim);
+  pinIdx || (pinIdx = new Vec3(0, 0, 0));
+  let rowCol = splitGrid(layout, block, dim, destIdx, 0);
+  if (!rowCol) {
+    return;
+  }
+  let maxPos = maxIdx ?? cxOther;
+  let cellPos = t * maxPos;
+  if (keep) {
+    cellPos = clamp(cellPos, 0, maxPos - 1);
+  }
+  let cellIdx = Math.floor(cellPos);
+  if (cellIdx >= maxPos) {
+    return;
+  }
+  splitGrid(layout, rowCol, otherDim, cellIdx + 0.5, 0);
+  let destIdxVec = new Vec3(0, 0, 0);
+  destIdxVec.setAt(dim, destIdx);
+  destIdxVec.setAt(otherDim, cellIdx);
+  if (rowCol && !hidePopup) {
+    drawDependences(state, block, destIdxVec);
+    drawDataFlow(state, block, destIdxVec, pinIdx);
+  }
+  for (let blk of findSubBlocks(rowCol, otherDim, null, cellIdx)) {
+    blk.access.disable = false;
+  }
+}
+function focusSelfAttentionHeadTimers(args, duration) {
+  let afterTime2 = args.tools.afterTime;
+  let totalTime = 1.5 * 2;
+  let timeScale = duration / totalTime;
+  let t0_dissolveHeads = afterTime2(null, 1 * timeScale, 0.5 * timeScale);
+  let t2_alignqkv = afterTime2(null, 1 * timeScale, 0.5 * timeScale);
+  return { t0_dissolveHeads, t2_alignqkv };
+}
+function focusSelfAttentionHead(args, timers) {
+  let { layout } = args;
+  let { t0_dissolveHeads, t2_alignqkv } = timers;
+  let targetHeadIdx = 2;
+  let targetHead = layout.blocks[0].heads[targetHeadIdx];
+  let block = layout.blocks[0];
+  {
+    for (let headIdx = 0; headIdx < block.heads.length; headIdx++) {
+      if (headIdx == targetHeadIdx) {
+        continue;
+      }
+      for (let cube of block.heads[headIdx].cubes) {
+        cube.opacity = lerpSmoothstep(1, 0, t0_dissolveHeads.t);
+      }
+    }
+  }
+  {
+    let headZ = targetHead.attnMtx.z;
+    let targetHeadZ = block.ln1.lnResid.z;
+    let deltaZ = lerpSmoothstep(0, targetHeadZ - headZ, t2_alignqkv.t);
+    for (let cube of targetHead.cubes) {
+      cube.z += deltaZ;
+    }
+  }
+  {
+    let qkv = [
+      [targetHead.qBlock, targetHead.qWeightBlock, targetHead.qBiasBlock],
+      [targetHead.kBlock, targetHead.kWeightBlock, targetHead.kBiasBlock],
+      [targetHead.vBlock, targetHead.vWeightBlock, targetHead.vBiasBlock]
+    ];
+    let targetZ = block.ln1.lnResid.z;
+    let strideY = targetHead.qBlock.dy + layout.margin;
+    let baseY = targetHead.qBlock.y;
+    let qkvYPos = [-strideY * 2, -strideY, 0];
+    for (let i = 0; i < 3; i++) {
+      let y = lerpSmoothstep(qkv[i][0].y, baseY + qkvYPos[i], t2_alignqkv.t);
+      let z = lerpSmoothstep(qkv[i][0].z, targetZ, t2_alignqkv.t);
+      for (let cube of qkv[i]) {
+        cube.y = y;
+        cube.z = z;
+      }
+    }
+    let blockMidY = (blk) => blk.y + blk.dy / 2;
+    let resid0Idx = layout.cubes.indexOf(block.ln1.lnResid);
+    let yDelta = lerpSmoothstep(0, blockMidY(block.ln1.lnResid) - blockMidY(targetHead.kBlock), t2_alignqkv.t);
+    for (let i = 0; i < resid0Idx; i++) {
+      let targetOpacity = 0.2;
+      layout.cubes[i].opacity = lerpSmoothstep(1, targetOpacity, t2_alignqkv.t);
+    }
+    let afterAttn = false;
+    for (let i = resid0Idx + 1; i < layout.cubes.length; i++) {
+      let cube = layout.cubes[i];
+      cube.y += yDelta;
+      if (afterAttn) {
+        cube.opacity = Math.min(lerpSmoothstep(1, 0.2, t2_alignqkv.t), cube.opacity ?? 1);
+      }
+      afterAttn = afterAttn || cube === targetHead.vOutBlock;
+    }
+  }
+}
+function drawSymbolBetweenBlocks(args, block1, block2, dim, symbol, opts) {
+  let { color, size } = opts;
+  let block1Dim = getBlkDimensions(block1);
+  let block2Dim = getBlkDimensions(block2);
+  let midPt;
+  if (dim === 0 /* X */) {
+    midPt = new Vec3(
+      lerp(block1Dim.br.x, block2Dim.tl.x, 0.5),
+      (block1Dim.tl.y + block1Dim.br.y + block2Dim.tl.y + block2Dim.br.y) * 0.25,
+      block1Dim.tl.z + args.layout.cell / 2
+    );
+  } else {
+    midPt = new Vec3(
+      (block1Dim.tl.x + block1Dim.br.x + block2Dim.tl.x + block2Dim.br.x) * 0.25,
+      lerp(block1Dim.br.y, block2Dim.tl.y, 0.5),
+      block1Dim.tl.z + args.layout.cell / 2
+    );
+  }
+  let mtx = Mat4f.fromTranslation(midPt);
+  let fontOpts = { color, size, mtx };
+  let w = measureText(args.state.render.modelFontBuf, symbol, fontOpts);
+  drawText(args.state.render.modelFontBuf, symbol, -w / 2, -fontOpts.size / 2, fontOpts);
+}
+
+// features/llm-visualization/upstream/src/llm/walkthrough-develo/DeveloSoftmax.ts
+function runDeveloSoftmax(args) {
+  let { state, tools: { afterTime: afterTime2 } } = args;
+  setInitialCamera(state, new Vec3(-24.35, 0, -1702.195), new Vec3(283.1, 0.6, 1.556));
+  afterTime2(null, 3);
+  setMathCue(state, "softmax_stable");
+}
+
+// features/llm-visualization/upstream/src/llm/walkthrough-develo/DeveloTransformer.ts
+function runDeveloTransformer(args) {
+  let { state, tools: { afterTime: afterTime2 } } = args;
+  setInitialCamera(state, new Vec3(-135.531, 0, -353.905), new Vec3(291.1, 13.6, 5.706));
+  afterTime2(null, 3);
+  setMathCue(state, "transformer_block");
+}
+
+// features/llm-visualization/upstream/src/llm/walkthrough-develo/DeveloWalkthrough.ts
+var DEVELO_WALKTHROUGH_PHASES = [
+  "intro",
+  "embedding",
+  "layerNorm",
+  "selfAttention",
+  "projection",
+  "mlp",
+  "transformer",
+  "softmax",
+  "output"
+];
+function createDeveloWalkthrough(markDirty) {
+  return {
+    phase: "intro",
+    phaseIndex: 0,
+    time: 0,
+    prevTime: 0,
+    dt: 0,
+    viewDt: 0,
+    running: false,
+    speed: 1,
+    phaseLength: 0,
+    times: [],
+    phaseData: /* @__PURE__ */ new Map(),
+    phaseTransitiveData: null,
+    cameraInitial: null,
+    mathCue: "",
+    complete: false,
+    dimHighlightBlocks: null,
+    markDirty
+  };
+}
+function startDeveloWalkthrough(state) {
+  state.inWalkthrough = true;
+  state.walkthrough.running = true;
+  state.walkthrough.complete = false;
+  state.walkthrough.markDirty();
+}
+function pauseDeveloWalkthrough(state) {
+  state.walkthrough.running = false;
+  state.walkthrough.markDirty();
+}
+function resetDeveloWalkthrough(state) {
+  let wt = state.walkthrough;
+  wt.phase = "intro";
+  wt.phaseIndex = 0;
+  wt.time = 0;
+  wt.prevTime = 0;
+  wt.dt = 0;
+  wt.running = false;
+  wt.complete = false;
+  wt.phaseLength = 0;
+  wt.times = [];
+  wt.phaseData.clear();
+  wt.phaseTransitiveData = null;
+  wt.cameraInitial = null;
+  wt.mathCue = "";
+  wt.dimHighlightBlocks = null;
+  wt.markDirty();
+}
+function getDeveloWalkthroughSnapshot(state) {
+  let wt = state.walkthrough;
+  return {
+    phase: wt.phase,
+    phaseIndex: wt.phaseIndex,
+    time: wt.time,
+    phaseLength: wt.phaseLength,
+    running: wt.running,
+    complete: wt.complete,
+    speed: wt.speed,
+    mathCue: wt.mathCue
+  };
+}
+function setDeveloWalkthroughSpeed(state, speed) {
+  state.walkthrough.speed = speed;
+}
+function setMathCue(state, cue) {
+  state.walkthrough.mathCue = cue;
+}
+function advancePhase(wt) {
+  if (wt.phaseIndex >= DEVELO_WALKTHROUGH_PHASES.length - 1) {
+    wt.running = false;
+    wt.complete = true;
+    return;
+  }
+  wt.phaseIndex += 1;
+  wt.phase = DEVELO_WALKTHROUGH_PHASES[wt.phaseIndex];
+  wt.time = 0;
+  wt.prevTime = 0;
+  wt.phaseData.delete(wt.phase);
+  wt.phaseTransitiveData = null;
+  wt.mathCue = "";
+}
+function runDeveloWalkthrough(view, state) {
+  let wt = state.walkthrough;
+  let dtMs = view.dt || 16;
+  wt.viewDt = dtMs;
+  wt.dt = 0;
+  if (wt.running) {
+    let dtSeconds = dtMs * wt.speed / 1e3;
+    wt.time += dtSeconds;
+    wt.dt = dtSeconds;
+    view.markDirty();
+  }
+  wt.times = [];
+  wt.phaseLength = 0;
+  wt.dimHighlightBlocks = null;
+  let args = {
+    state,
+    layout: state.layout,
+    walkthrough: wt,
+    tools: phaseTools(state)
+  };
+  switch (wt.phase) {
+    case "intro":
+      runDeveloIntro(args);
+      break;
+    case "embedding":
+      runDeveloEmbedding(args);
+      break;
+    case "layerNorm":
+      runDeveloLayerNorm(args);
+      break;
+    case "selfAttention":
+      runDeveloSelfAttention(args);
+      break;
+    case "projection":
+      runDeveloProjection(args);
+      break;
+    case "mlp":
+      runDeveloMlp(args);
+      break;
+    case "transformer":
+      runDeveloTransformer(args);
+      break;
+    case "softmax":
+      runDeveloSoftmax(args);
+      break;
+    case "output":
+      runDeveloOutput(args);
+      break;
+  }
+  if (wt.running && wt.phaseLength > 0 && wt.time >= wt.phaseLength) {
+    advancePhase(wt);
+  }
+  wt.prevTime = wt.time;
 }
 
 // features/llm-visualization/upstream/src/llm/render/blockRender.ts
@@ -5530,6 +7783,14 @@ function constructModel(model, config, native) {
     intersDirty: true
   };
 }
+function resetWasmModelInput(wasmModel, jsModel) {
+  const inputTokensTensor = wasmModel.native.getModelTensor(wasmModel.modelPtr, 17 /* InputTokens */);
+  inputTokensTensor.buffer.set([2, 1, 0, 1, 1, 2, 0, 0, 0, 0, 0]);
+  jsModel.inputLen = 6;
+  wasmModel.native.runModel(wasmModel.modelPtr);
+  wasmModel.intersDirty = true;
+  syncWasmDataWithJsAndGpu(wasmModel, jsModel);
+}
 function stepWasmModel(wasmModel, jsModel) {
   let { native, modelPtr } = wasmModel;
   let { shape: { B, T, vocabSize } } = jsModel;
@@ -5670,13 +7931,14 @@ function initProgramState(canvasEl, fontAtlasData) {
     camPosModel: new Vec3()
   };
   let shape = { ...NANO_SHAPE };
-  return {
+  let walkthrough = createDeveloWalkthrough(() => {
+  });
+  let state = {
     native: null,
     wasmGptModel: null,
     render,
     inWalkthrough: false,
-    walkthrough: { markDirty: () => {
-    }, running: false, time: 0, phaseLength: 0 },
+    walkthrough,
     camera,
     shape,
     layout: genGptModelLayout(shape),
@@ -5730,61 +7992,8 @@ function initProgramState(canvasEl, fontAtlasData) {
     inputLength: 6,
     generatedLength: 0
   };
-}
-function applyDeveloStage(state) {
-  let layout = state.layout;
-  if (!layout) return;
-  let p = state.stageProgress;
-  let stage = state.stage;
-  for (let c of layout.cubes) {
-    c.opacity = 0.28;
-    c.highlight = 0;
-  }
-  state.display.tokenIdxModelOpacity = [1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0];
-  function raise(cubes, hl = 0.65) {
-    if (!cubes) return;
-    for (let c of cubes) {
-      if (!c) continue;
-      c.opacity = 1;
-      c.highlight = hl;
-    }
-  }
-  if (stage === "tokens") {
-    raise([layout.idxObj], 0.9);
-    layout.idxObj.opacity = 1;
-  } else if (stage === "embedding") {
-    raise([layout.tokEmbedObj, layout.posEmbedObj, layout.residual0], 0.7);
-  } else if (stage === "qkv") {
-    let block = layout.blocks[0];
-    let headCount = p < 0.55 ? 1 : 3;
-    if (block && block.heads) {
-      for (let i = 0; i < Math.min(headCount, block.heads.length); i++) {
-        let h = block.heads[i];
-        raise([h.qBlock, h.kBlock, h.vBlock, h.qWeightBlock, h.kWeightBlock, h.vWeightBlock], i === 0 ? 0.85 : 0.55);
-      }
-    }
-  } else if (stage === "attention") {
-    let block = layout.blocks[0];
-    if (block && block.heads) {
-      for (let h of block.heads) {
-        raise([h.attnMtx, h.attnMtxSm, h.attnMtxAgg1, h.attnMtxAgg2, h.vOutBlock], 0.9);
-      }
-    }
-  } else if (stage === "transformer") {
-    for (let b of layout.blocks) {
-      raise(b.cubes, 0.45);
-      raise([b.attnResidual, b.mlpResidual].filter(Boolean), 0.7);
-    }
-  } else if (stage === "output") {
-    raise([layout.ln_f.lnResid, layout.lmHeadWeight, layout.logits, layout.logitsSoftmax].filter(Boolean), 0.85);
-  } else if (stage === "prediction") {
-    raise([layout.logitsSoftmax, layout.idxObj].filter(Boolean), 0.8);
-  } else {
-    for (let c of layout.cubes) {
-      c.opacity = 1;
-      c.highlight = 0;
-    }
-  }
+  walkthrough.markDirty = () => state.markDirty();
+  return state;
 }
 function runProgram(view, state) {
   let timer0 = performance.now();
@@ -5806,7 +8015,7 @@ function runProgram(view, state) {
     state.generatedLength = Math.max(0, (state.jsGptModel.inputLen || 6) - 6);
   }
   state.layout = genGptModelLayout(state.shape, state.jsGptModel);
-  applyDeveloStage(state);
+  runDeveloWalkthrough(view, state);
   genModelViewMatrices(state, state.layout);
   let queryRes = beginQueryAndGetPrevMs(state.render.queryManager, "render");
   if (isNotNil(queryRes)) {
@@ -5815,7 +8024,6 @@ function runProgram(view, state) {
   state.render.renderTiming = false;
   updateCamera(state, view);
   drawAllArrows(state.render, state.layout);
-  drawModelCard(state, state.layout, "nano-gpt", new Vec3());
   drawTokens(state.render, state.layout, state.display, void 0, 6);
   state.render.sharedRender.activePhase = 0 /* Opaque */;
   drawBlockLabels(state.render, state.layout);
@@ -6473,20 +8681,25 @@ export {
   TensorF32,
   Vec3,
   Vec4,
-  applyDeveloStage,
   cameraToMatrixView,
   constructModel,
   createGpuModelForWasm,
   fetchFontAtlasData,
   fetchJsonAsset,
   fetchRequiredAsset,
+  getDeveloWalkthroughSnapshot,
   initModel,
   initProgramState,
   initRender,
   instantiateLlmWasm,
   loadNativeBindings,
+  pauseDeveloWalkthrough,
+  resetDeveloWalkthrough,
+  resetWasmModelInput,
   runProgram,
+  setDeveloWalkthroughSpeed,
   setModelInputData,
+  startDeveloWalkthrough,
   stepWasmModel,
   syncWasmDataWithJsAndGpu,
   updateCamera

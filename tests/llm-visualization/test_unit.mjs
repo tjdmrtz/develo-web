@@ -13,31 +13,53 @@ const root = path.join(
 );
 const load = (f) => import(pathToFileURL(path.join(root, f)).href);
 
-test("timeline boundaries", async () => {
-  const { getStageAtTime } = await load("timeline.js");
-  const cases = [
-    [0, "tokens"],
-    [1399, "tokens"],
-    [1400, "embedding"],
-    [3199, "embedding"],
-    [3200, "qkv"],
-    [5299, "qkv"],
-    [5300, "attention"],
-    [8199, "attention"],
-    [8200, "transformer"],
-    [10499, "transformer"],
-    [10500, "output"],
-    [12599, "output"],
-    [12600, "prediction"],
-    [13999, "prediction"],
-    [14000, "idle"],
-    [20000, "idle"],
+test("walkthrough phase order", async () => {
+  const { WALKTHROUGH_PHASES, walkthroughPhaseIndex } = await load("timeline.js");
+  const expected = [
+    "intro",
+    "embedding",
+    "layerNorm",
+    "selfAttention",
+    "projection",
+    "mlp",
+    "transformer",
+    "softmax",
+    "output",
   ];
-  for (const [ms, stage] of cases) {
-    const r = getStageAtTime(ms);
-    assert.equal(r.stage, stage, `${ms} => ${stage}, got ${r.stage}`);
-    assert.ok(r.localProgress >= 0 && r.localProgress <= 1);
+  assert.deepEqual(WALKTHROUGH_PHASES, expected);
+  expected.forEach((phase, i) => {
+    assert.equal(walkthroughPhaseIndex(phase), i);
+  });
+  assert.equal(walkthroughPhaseIndex("nope"), -1);
+});
+
+test("math cues are notation only", async () => {
+  const { MATH_CUES } = await load("mathCues.js");
+  const required = [
+    "intro_tokens", "intro_indices", "intro_embedding", "intro_flow",
+    "embedding_token", "embedding_position", "embedding_sum",
+    "layernorm_mean", "layernorm_variance", "layernorm_normalize", "layernorm_affine",
+    "attention_qkv", "attention_dot", "attention_score", "attention_mask",
+    "attention_softmax", "attention_weighted_value",
+    "projection_concat", "projection_linear", "projection_residual",
+    "mlp_norm", "mlp_expand", "mlp_gelu", "mlp_project", "mlp_residual",
+    "transformer_block", "softmax_stable",
+    "output_final_norm", "output_logits", "output_probabilities", "output_argmax",
+  ];
+  for (const id of required) {
+    assert.ok(MATH_CUES[id], `missing math cue ${id}`);
+    assert.ok(!/The model|Each position|Discrete inputs|tokens become/i.test(MATH_CUES[id]));
   }
+  assert.match(MATH_CUES.embedding_token, /E_\{\\mathrm\{tok\}\}/);
+  assert.match(MATH_CUES.embedding_position, /E_\{\\mathrm\{pos\}\}/);
+  assert.match(MATH_CUES.layernorm_mean, /\\mu_t/);
+  assert.match(MATH_CUES.layernorm_variance, /\\sigma_t\^2/);
+  assert.match(MATH_CUES.layernorm_affine, /\\gamma_c/);
+  assert.match(MATH_CUES.attention_qkv, /W_Q/);
+  assert.match(MATH_CUES.attention_score, /\\sqrt\{A\}/);
+  assert.match(MATH_CUES.attention_softmax, /\\alpha_\{t,j\}/);
+  assert.match(MATH_CUES.mlp_gelu, /\\operatorname\{GELU\}/);
+  assert.match(MATH_CUES.output_argmax, /arg\\,max/);
 });
 
 test("dpr cap", async () => {

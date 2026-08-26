@@ -201,6 +201,15 @@ export function constructModel(model: ITensorSet, config: IGptModelConfig, nativ
     };
 }
 
+export function resetWasmModelInput(wasmModel: IWasmGptModel, jsModel: IGptModelLink) {
+    const inputTokensTensor = wasmModel.native.getModelTensor(wasmModel.modelPtr, TensorType.InputTokens);
+    inputTokensTensor.buffer.set([2, 1, 0, 1, 1, 2, 0, 0, 0, 0, 0]);
+    jsModel.inputLen = 6;
+    wasmModel.native.runModel(wasmModel.modelPtr);
+    wasmModel.intersDirty = true;
+    syncWasmDataWithJsAndGpu(wasmModel, jsModel);
+}
+
 export function stepWasmModel(wasmModel: IWasmGptModel, jsModel: IGptModelLink) {
     let { native, modelPtr } = wasmModel;
     let { shape: { B, T, vocabSize } } = jsModel;

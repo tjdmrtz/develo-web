@@ -12,12 +12,13 @@
 //              --outfile=features/llm-visualization/runtime/engine.js
 
 export { LLM_VIZ_ASSET_BASE, fetchRequiredAsset, fetchJsonAsset, instantiateLlmWasm } from "./upstream/src/utils/assetBase";
-export { initProgramState, runProgram, applyDeveloStage, NANO_SHAPE } from "./upstream/src/llm/Program";
+export { initProgramState, runProgram, NANO_SHAPE } from "./upstream/src/llm/Program";
 export type { IProgramState, DeveloVizStage } from "./upstream/src/llm/Program";
+export { startDeveloWalkthrough, pauseDeveloWalkthrough, resetDeveloWalkthrough, getDeveloWalkthroughSnapshot, setDeveloWalkthroughSpeed } from "./upstream/src/llm/walkthrough-develo/DeveloWalkthrough";
 export { initRender } from "./upstream/src/llm/render/modelRender";
 export { fetchFontAtlasData } from "./upstream/src/llm/render/fontRender";
 export { loadNativeBindings } from "./upstream/src/llm/NativeBindings";
-export { constructModel, createGpuModelForWasm, stepWasmModel, syncWasmDataWithJsAndGpu } from "./upstream/src/llm/GptModelWasm";
+export { constructModel, createGpuModelForWasm, stepWasmModel, syncWasmDataWithJsAndGpu, resetWasmModelInput } from "./upstream/src/llm/GptModelWasm";
 export { initModel, setModelInputData } from "./upstream/src/llm/GptModel";
 export { TensorF32 } from "./upstream/src/utils/tensor";
 export { Vec3, Vec4 } from "./upstream/src/utils/vector";

@@ -910,35 +910,32 @@ a.card:hover { color: var(--paper); background: var(--blue); border-color: rgba(
   font-size: .72rem;
   letter-spacing: .04em;
 }
-.llm-tech-explain { display: grid; gap: .7rem; margin: 1.6rem 0 0; padding: 0; list-style: none; }
-.llm-tech-explain li { color: rgba(255,255,255,.72); font-family: var(--mono); font-size: .76rem; }
-.llm-tech-explain strong { display: block; color: var(--paper); font-size: .82rem; }
 .llm-tech-copy .btn { display: inline-block; margin-top: 1.8rem; }
 
 /* .btn sets an explicit display, which would otherwise beat the UA [hidden] rule. */
 .llm-tech [hidden] { display: none; }
 
-.llm-viz-shell { min-width: 0; border: 1px solid rgba(255,255,255,.58); background: rgba(5,5,5,.72); }
-.llm-viz-meta {
-  display: flex;
-  flex-wrap: wrap;
-  gap: .3rem 1rem;
-  padding: 1rem 1.15rem;
-  border-bottom: 1px solid rgba(255,255,255,.34);
+.llm-viz-shell {
+  min-width: 0;
+  border: 0;
+  background: transparent;
 }
-.llm-viz-caption {
-  margin: 0;
-  color: var(--blue-soft);
-  font-family: var(--mono);
-  font-size: .64rem;
-  font-weight: 700;
-  letter-spacing: .14em;
+.llm-viz-experience {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: clamp(1rem, 2vw, 1.5rem);
+  align-items: center;
 }
-.llm-viz-dims { margin: 0; color: rgba(255,255,255,.62); font-family: var(--mono); font-size: .64rem; }
+@media (min-width: 1500px) {
+  .llm-viz-experience {
+    grid-template-columns: minmax(0, 1fr) minmax(230px, 280px);
+    gap: clamp(1.25rem, 2vw, 2rem);
+  }
+}
 
 .llm-viz-stage {
   position: relative;
-  height: clamp(520px, 46vw, 680px);
+  height: clamp(560px, 48vw, 700px);
   overflow: hidden;
   /* Passive by default: the page must scroll with the pointer over the canvas. */
   touch-action: pan-y;
@@ -1006,21 +1003,25 @@ a.card:hover { color: var(--paper); background: var(--blue); border-color: rgba(
   font-weight: 700;
 }
 
-.llm-viz-overlay {
-  position: absolute;
-  left: 0;
-  bottom: 0;
-  width: 100%;
-  display: grid;
-  gap: .25rem;
-  padding: 1rem 1.15rem;
-  background: linear-gradient(transparent, rgba(5,5,5,.88));
-  pointer-events: none;
+.llm-viz-math {
+  min-width: 0;
+  min-height: 7rem;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: .75rem;
+  color: var(--paper);
+  background: transparent;
+  border: 0;
+  padding: .25rem 0;
 }
-.llm-viz-stage-title { margin: 0; color: var(--paper); font-family: var(--mono); font-size: .78rem; font-weight: 700; }
-.llm-viz-stage-desc { margin: 0; max-width: 52ch; color: rgba(255,255,255,.78); font-family: var(--mono); font-size: .7rem; }
-.llm-viz-probs:empty { display: none; }
-.llm-viz-probs { margin: 0; color: var(--blue-soft); font-family: var(--mono); font-size: .68rem; }
+.llm-viz-equation { min-height: 4rem; color: var(--paper); }
+.llm-viz-equation .katex-display { margin: 0; }
+.llm-viz-equation .katex { font-size: clamp(1rem, 1.2vw, 1.3rem); }
+.llm-viz-math-values .katex { color: var(--orange); font-size: .95rem; }
+@media (max-width: 1499px) {
+  .llm-viz-math { max-width: 48rem; }
+}
 .llm-viz-hint { margin: 0; color: var(--orange); font-family: var(--mono); font-size: .66rem; }
 
 .llm-viz-controls {
@@ -1029,8 +1030,8 @@ a.card:hover { color: var(--paper); background: var(--blue); border-color: rgba(
   align-items: center;
   justify-content: space-between;
   gap: .8rem;
-  padding: 1rem 1.15rem;
-  border-top: 1px solid rgba(255,255,255,.34);
+  padding: 1rem 0 0;
+  border-top: 0;
 }
 .llm-viz-progress {
   display: flex;
@@ -1045,18 +1046,10 @@ a.card:hover { color: var(--paper); background: var(--blue); border-color: rgba(
 .llm-viz-buttons { display: flex; flex-wrap: wrap; gap: .5rem; }
 .llm-viz-buttons .btn { border: 0; cursor: pointer; }
 .llm-viz-buttons .btn:focus-visible { outline: 2px solid var(--blue-soft); outline-offset: 2px; }
-.llm-viz-disclaimer {
-  margin: 0;
-  padding: 0 1.15rem 1.15rem;
-  color: rgba(255,255,255,.58);
-  font-family: var(--mono);
-  font-size: .64rem;
-  line-height: 1.6;
-}
 
 @media (max-width: 900px) {
   .llm-tech { grid-template-columns: 1fr; gap: 2rem; }
-  .llm-viz-stage { height: clamp(360px, 105vw, 500px); min-height: 360px; }
+  .llm-viz-stage { height: clamp(420px, 112vw, 560px); min-height: 420px; }
   .llm-viz-controls { justify-content: flex-start; }
   .llm-viz-buttons .btn { min-height: 44px; }
 }

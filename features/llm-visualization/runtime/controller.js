@@ -1,17 +1,13 @@
 import { LLM_VIZ_ASSET_BASE, fetchJsonAsset } from "./assets.js";
 import { detectLlmVizCapabilities, isLlmVizSupported } from "./capabilities.js";
 import { getLlmVizDpr } from "./dpr.js";
-import { getStageAtTime, TIMELINE_DURATION_MS } from "./timeline.js";
+import { WALKTHROUGH_PHASES } from "./timeline.js";
 import { COPY } from "./i18n.js";
 import { createBrowserClock } from "./clock.js";
-import { CAMERA_PRESETS, presetToCamera } from "./cameraPresets.js";
-import { getCurrentTokenProbabilities, formatProbability } from "./probabilities.js";
-
-const STAGE_KEYS = ["tokens", "embedding", "qkv", "attention", "transformer", "output", "prediction"];
-
-function tensorSetFromJson(data) {
-  return { ...data };
-}
+import { homeCamera } from "./cameraHome.js";
+import { getCurrentTokenProbabilities } from "./probabilities.js";
+import { MATH_CUES } from "./mathCues.js";
+import { renderLlmMath } from "./mathRenderer.js";
 
 /**
  * True when a button activation came from the keyboard: synthetic clicks from
@@ -46,16 +42,22 @@ export class DeveloLlmVizController {
     this.pointerInteracting = false;
     this.dirty = true;
     this.rafId = null;
-    this.timelineStart = 0;
-    this.timelineElapsed = 0;
     this.wasPlayingBeforeHidden = false;
+    this.completeAt = null;
+    this.returningHome = false;
+    this.homeLerp = null;
+    this.lastMathCue = null;
+    this.lastProbabilitySignature = null;
+    this.mathRenderSeq = 0;
+    this.seenPhases = [];
+    this.seenMathCues = [];
     this.abort = null;
     this.engine = null;
     this.progState = null;
     this.canvas = root.querySelector("[data-llm-canvas]");
-    this.stageEl = root.querySelector("[data-llm-stage]");
     this.hintEl = root.querySelector("[data-llm-hint]");
-    this.probsEl = root.querySelector("[data-llm-probs]");
+    this.equationEl = root.querySelector("[data-llm-equation]");
+    this.mathValuesEl = root.querySelector("[data-llm-math-values]");
     this.shell = root.querySelector(".llm-viz-stage");
     this.exploreBtn = root.querySelector("[data-llm-explore]");
     this.resetBtn = root.querySelector("[data-llm-reset]");
@@ -133,7 +135,10 @@ export class DeveloLlmVizController {
   onMotionChange() {
     this.reducedMotion = Boolean(this.mediaQuery && this.mediaQuery.matches);
     if (this.progState) this.progState.reducedMotion = this.reducedMotion;
-    if (this.reducedMotion && this.playback === "playing") this.pausePlayback("idle");
+    if (this.reducedMotion && this.playback === "playing") {
+      this.pausePlayback("idle");
+      if (this.engine && this.progState) this.engine.pauseDeveloWalkthrough(this.progState);
+    }
   }
 
   onVisibility() {
@@ -196,13 +201,11 @@ export class DeveloLlmVizController {
       this.progState.gptGpuModel = engine.initModel(this.progState.render, { data, model, native }, 1);
 
       this.resize();
-      this.applyCamera("overview", true);
-      // Settle on a stable overview frame; autoplay decides whether to advance.
-      this.progState.stage = "idle";
+      this.applyHomeCamera(true);
       engine.runProgram({ time: this.clock.now(), dt: 16, markDirty: () => this.markDirty() }, this.progState);
       this.root.classList.add("is-ready");
       this.status = "ready";
-      this.updateStageUi("idle", 0);
+      this.updateWalkthroughUi({ phase: null, mathCue: "idle", complete: false, running: false });
       this.setControls("passive");
       this.maybeAutoplay();
       this.markDirty();
@@ -226,34 +229,35 @@ export class DeveloLlmVizController {
     if (this.autoplayDone) return;
     if (this.userInteracted) return;
     if (this.intersectionRatio < 0.3) return;
-    this.startTimeline();
+    this.startWalkthrough();
     this.autoplayDone = true;
   }
 
-  startTimeline() {
-    this.timelineElapsed = 0;
-    this.timelineStart = this.clock.now();
+  startWalkthrough() {
+    if (!this.engine || !this.progState) return;
+    this.completeAt = null;
+    this.returningHome = false;
+    this.homeLerp = null;
     this.timelinePlaying = true;
     this.playback = "playing";
-    this.userInteracted = false;
-    if (this.progState) {
-      this.progState.interactive = false;
-      this.progState.stage = "tokens";
-    }
+    this.progState.interactive = false;
+    this.engine.startDeveloWalkthrough(this.progState);
     this.setControls("playing");
-    this.applyCamera("tokens");
     this.markDirty();
   }
 
   pausePlayback(next) {
     this.timelinePlaying = false;
     this.playback = next;
+    if (this.engine && this.progState) this.engine.pauseDeveloWalkthrough(this.progState);
     this.markDirty();
   }
 
   resumePlayback() {
-    if (this.timelineElapsed >= TIMELINE_DURATION_MS) return;
-    this.timelineStart = this.clock.now() - this.timelineElapsed;
+    if (!this.engine || !this.progState) return;
+    const snap = this.engine.getDeveloWalkthroughSnapshot(this.progState);
+    if (snap.complete) return;
+    this.engine.startDeveloWalkthrough(this.progState);
     this.timelinePlaying = true;
     this.playback = "playing";
     this.markDirty();
@@ -264,14 +268,10 @@ export class DeveloLlmVizController {
     this.userInteracted = true;
     this.timelinePlaying = false;
     this.playback = "interactive";
-    if (this.progState) {
-      this.progState.interactive = true;
-      this.progState.stage = "interactive";
-    }
+    if (this.engine && this.progState) this.engine.pauseDeveloWalkthrough(this.progState);
+    if (this.progState) this.progState.interactive = true;
     this.setControls("interactive");
     this.shell?.classList.add("is-interactive");
-    this.updateStageUi("interactive", 1);
-    // The explore button is now hidden, so keyboard focus must not be dropped.
     if (fromKeyboard) this.resetBtn?.focus();
     this.markDirty();
   }
@@ -282,14 +282,17 @@ export class DeveloLlmVizController {
     this.userInteracted = true;
     this.timelinePlaying = false;
     this.playback = "idle";
+    this.completeAt = null;
+    this.returningHome = false;
+    this.homeLerp = null;
     this.shell?.classList.remove("is-interactive");
+    if (this.engine && this.progState) this.engine.pauseDeveloWalkthrough(this.progState);
     if (this.progState) {
       this.progState.interactive = false;
-      this.progState.stage = "idle";
       this.progState.display.hoverTarget = null;
     }
-    this.applyCamera("overview");
-    this.updateStageUi("idle", 1);
+    this.applyHomeCamera();
+    this.updateWalkthroughUi({ phase: null, mathCue: "idle", complete: true, running: false });
     this.setControls("passive");
     if (fromKeyboard) this.exploreBtn?.focus();
     this.markDirty();
@@ -300,18 +303,26 @@ export class DeveloLlmVizController {
     this.shell?.classList.remove("is-interactive");
     this.userInteracted = false;
     this.autoplayDone = true;
-    if (this.progState) {
+    if (this.engine && this.progState) {
       this.progState.interactive = false;
       this.progState.generatedLength = 0;
-      if (this.progState.jsGptModel) this.progState.jsGptModel.inputLen = 6;
+      if (this.progState.wasmGptModel && this.progState.jsGptModel) {
+        this.engine.resetWasmModelInput(this.progState.wasmGptModel, this.progState.jsGptModel);
+      } else if (this.progState.jsGptModel) {
+        this.progState.jsGptModel.inputLen = 6;
+      }
+      this.engine.resetDeveloWalkthrough(this.progState);
     }
-    this.applyCamera("tokens");
-    this.startTimeline();
+    this.lastMathCue = null;
+    this.lastProbabilitySignature = null;
+    this.seenPhases = [];
+    this.seenMathCues = [];
+    this.startWalkthrough();
   }
 
-  applyCamera(name, immediate) {
+  applyHomeCamera(immediate) {
     if (!this.engine || !this.progState) return;
-    const cam = presetToCamera(name, this.engine.Vec3);
+    const cam = homeCamera(this.engine.Vec3);
     if (immediate) {
       this.progState.camera.center = cam.center;
       this.progState.camera.angle = cam.angle;
@@ -319,6 +330,45 @@ export class DeveloLlmVizController {
       this.progState.camera.desiredCameraTransition = undefined;
     } else {
       this.progState.camera.desiredCamera = cam;
+    }
+  }
+
+  finishWalkthroughIfNeeded(snapshot) {
+    if (!snapshot || !snapshot.complete || this.playback !== "playing") return;
+    if (this.completeAt == null) this.completeAt = this.clock.now();
+    this.timelinePlaying = false;
+    this.autoplayDone = true;
+    if (this.clock.now() - this.completeAt < 1000) return;
+    if (this.returningHome) return;
+    this.returningHome = true;
+    const cam = this.progState.camera;
+    this.homeLerp = {
+      start: this.clock.now(),
+      fromCenter: { x: cam.center.x, y: cam.center.y, z: cam.center.z },
+      fromAngle: { x: cam.angle.x, y: cam.angle.y, z: cam.angle.z },
+    };
+  }
+
+  tickHomeReturn() {
+    if (!this.returningHome || !this.homeLerp || !this.engine || !this.progState) return;
+    const dest = homeCamera(this.engine.Vec3);
+    const t = Math.min(1, (this.clock.now() - this.homeLerp.start) / 600);
+    const lerp = (a, b) => a + (b - a) * t;
+    const srcC = this.homeLerp.fromCenter;
+    const srcA = this.homeLerp.fromAngle;
+    this.progState.camera.center = new this.engine.Vec3(
+      lerp(srcC.x, dest.center.x), lerp(srcC.y, dest.center.y), lerp(srcC.z, dest.center.z),
+    );
+    this.progState.camera.angle = new this.engine.Vec3(
+      lerp(srcA.x, dest.angle.x), lerp(srcA.y, dest.angle.y), lerp(srcA.z, dest.angle.z),
+    );
+    if (t >= 1) {
+      this.returningHome = false;
+      this.homeLerp = null;
+      this.completeAt = null;
+      this.playback = "idle";
+      this.setControls("passive");
+      this.updateWalkthroughUi({ phase: null, mathCue: "idle", complete: true, running: false });
     }
   }
 
@@ -335,29 +385,72 @@ export class DeveloLlmVizController {
     if (this.shell) this.shell.style.touchAction = interactive ? "none" : "pan-y";
   }
 
-  updateStageUi(stage, progress) {
-    const info = this.copy.stages[stage] || this.copy.stages.idle;
-    const titleEl = this.root.querySelector("[data-llm-stage-title]");
-    const descEl = this.root.querySelector("[data-llm-stage-desc]");
-    if (titleEl) titleEl.textContent = info.title;
-    if (descEl) descEl.textContent = info.description;
+  updateWalkthroughUi(snapshot) {
+    const phase = snapshot && snapshot.phase;
+    if (phase && this.seenPhases[this.seenPhases.length - 1] !== phase) {
+      this.seenPhases.push(phase);
+    }
     this.progressItems.forEach((el, i) => {
-      el.classList.toggle("is-active", STAGE_KEYS[i] === stage);
+      el.classList.toggle("is-active", WALKTHROUGH_PHASES[i] === phase);
     });
-    this.updateProbabilities();
+    const cue = (snapshot && snapshot.mathCue) || "idle";
+    if (cue && this.seenMathCues[this.seenMathCues.length - 1] !== cue) {
+      this.seenMathCues.push(cue);
+    }
+    this.renderMathCue(cue);
+    this.renderProbabilityMath(cue);
   }
 
-  updateProbabilities() {
-    if (!this.probsEl || !this.progState || !this.progState.jsGptModel) return;
-    const pos = Math.max(0, (this.progState.jsGptModel.inputLen || 6) - 1);
-    const probs = getCurrentTokenProbabilities(this.progState.jsGptModel, pos);
-    if (!probs.length) {
-      this.probsEl.textContent = "";
+  async renderMathCue(cue) {
+    if (!this.equationEl) return;
+    if (cue === this.lastMathCue) return;
+    const latex = MATH_CUES[cue] || MATH_CUES.idle;
+    const seq = ++this.mathRenderSeq;
+    this.lastMathCue = cue;
+    try {
+      await renderLlmMath(this.equationEl, latex);
+      if (seq !== this.mathRenderSeq) return;
+    } catch {
+      if (seq !== this.mathRenderSeq) return;
+      this.equationEl.textContent = "";
+    }
+  }
+
+  async renderProbabilityMath(cue) {
+    if (!this.mathValuesEl || !this.progState || !this.progState.jsGptModel) return;
+    const show = cue === "output_probabilities" || cue === "output_argmax";
+    if (!show) {
+      this.mathValuesEl.hidden = true;
+      this.mathValuesEl.textContent = "";
+      this.lastProbabilitySignature = null;
       return;
     }
-    const locale = this.lang === "es" ? "es" : "en";
-    const pred = this.lang === "es" ? "Predicción del modelo" : "Model prediction";
-    this.probsEl.textContent = `${pred}: ${probs.map((p) => `${p.token} ${formatProbability(p.probability, locale)}`).join(" · ")}`;
+    const pos = Math.max(0, (this.progState.jsGptModel.inputLen || 6) - 1);
+    const probs = getCurrentTokenProbabilities(this.progState.jsGptModel, pos);
+    if (!probs.length) return;
+    const byToken = { A: 0, B: 0, C: 0 };
+    for (const p of probs) byToken[p.token] = p.probability;
+    const fmt = (v) => `${(v * 100).toFixed(1)}\\%`;
+    const signature = `${byToken.A.toFixed(6)}|${byToken.B.toFixed(6)}|${byToken.C.toFixed(6)}`;
+    if (signature === this.lastProbabilitySignature) return;
+    this.lastProbabilitySignature = signature;
+    const latex = String.raw`p_t
+=
+\begin{bmatrix}
+P(A) & P(B) & P(C)
+\end{bmatrix}
+=
+\begin{bmatrix}
+${fmt(byToken.A)} & ${fmt(byToken.B)} & ${fmt(byToken.C)}
+\end{bmatrix}`;
+    const seq = this.mathRenderSeq;
+    try {
+      await renderLlmMath(this.mathValuesEl, latex);
+      if (seq !== this.mathRenderSeq) return;
+      this.mathValuesEl.hidden = false;
+    } catch {
+      this.mathValuesEl.hidden = true;
+    }
   }
 
   resize() {
@@ -396,6 +489,7 @@ export class DeveloLlmVizController {
     if (this.destroyed) return;
     const needsFrame = this.visible && (
       this.dirty || this.timelinePlaying || this.pointerInteracting ||
+      this.returningHome || this.completeAt != null ||
       (this.progState && this.progState.render && this.progState.render.syncObjects && this.progState.render.syncObjects.length)
     );
     if (!needsFrame) {
@@ -403,35 +497,16 @@ export class DeveloLlmVizController {
       return;
     }
 
-    if (this.timelinePlaying) {
-      this.timelineElapsed = Math.min(TIMELINE_DURATION_MS, this.clock.now() - this.timelineStart);
-      const { stage, localProgress } = getStageAtTime(this.timelineElapsed);
-      if (this.progState) {
-        const prev = this.progState.stage;
-        this.progState.stage = stage;
-        this.progState.stageProgress = localProgress;
-        if (prev !== stage && CAMERA_PRESETS[stage]) this.applyCamera(stage);
-        if (stage === "prediction" && localProgress > 0.4 && this.progState.generatedLength === 0) {
-          this.progState.stepModel = true;
-        }
-      }
-      this.updateStageUi(stage, localProgress);
-      if (this.timelineElapsed >= TIMELINE_DURATION_MS) {
-        this.timelinePlaying = false;
-        this.playback = "idle";
-        if (this.progState) this.progState.stage = "idle";
-        this.applyCamera("overview");
-        this.updateStageUi("idle", 1);
-        this.setControls("passive");
-      }
-    }
-
     if (this.engine && this.progState) {
       const dt = 16;
       this.engine.runProgram({ time: this.clock.now(), dt, markDirty: () => this.markDirty() }, this.progState);
+      const snapshot = this.engine.getDeveloWalkthroughSnapshot(this.progState);
+      this.updateWalkthroughUi(snapshot);
+      this.finishWalkthroughIfNeeded(snapshot);
+      this.tickHomeReturn();
     }
     this.dirty = false;
-    if (this.timelinePlaying || this.pointerInteracting) this.schedule();
+    if (this.timelinePlaying || this.pointerInteracting || this.returningHome || this.completeAt != null) this.schedule();
   }
 
   onPointerDown(ev) {
@@ -488,8 +563,17 @@ export class DeveloLlmVizController {
     this.root.__develoLlmViz = {
       getStatus: () => this.status,
       getPlayback: () => this.playback,
-      getStage: () => (this.progState ? this.progState.stage : null),
+      getStage: () => {
+        if (!this.engine || !this.progState) return null;
+        return this.engine.getDeveloWalkthroughSnapshot(this.progState).phase;
+      },
+      getWalkthrough: () => (this.engine && this.progState ? this.engine.getDeveloWalkthroughSnapshot(this.progState) : null),
+      getSeenPhases: () => this.seenPhases.slice(),
+      getSeenMathCues: () => this.seenMathCues.slice(),
       getCamera: () => this.progState && this.progState.camera,
+      setPlaybackSpeedForTests: (multiplier) => {
+        if (this.engine && this.progState) this.engine.setDeveloWalkthroughSpeed(this.progState, multiplier);
+      },
       setClock: (clock) => {
         // Drop the frame pending on the previous clock, otherwise `schedule()`
         // keeps seeing a live rafId and never asks the new clock for frames.

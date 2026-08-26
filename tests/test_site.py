@@ -885,20 +885,32 @@ def test_llm_viz_meaning_does_not_depend_on_the_canvas(page):
 
 
 @pytest.mark.parametrize("page", LLM_VIZ_PAGES)
-def test_llm_viz_headings_and_disclaimer(page):
+def test_llm_viz_headings_and_math_rail(page):
     soup = soup_of(page)
     viz = _viz(soup)
     heading = viz.find("h2")
     assert heading and heading.get_text(strip=True)
     assert len(soup.select("main h1")) == 1, f"{page}: heading hierarchy must stay valid"
-
-    disclaimer = viz.select_one(".llm-viz-disclaimer")
-    assert disclaimer, f"{page}: the tiny-model disclaimer is mandatory"
-    text = disclaimer.get_text(" ", strip=True).lower()
-    if page.startswith("/es"):
-        assert "pequeño" in text and "producción" in text
-    else:
-        assert "tiny" in text and "production" in text
+    assert viz.select_one(".llm-viz-experience")
+    assert viz.select_one(".llm-viz-math")
+    assert viz.select_one("[data-llm-equation]")
+    assert viz.select_one("[data-llm-math-values]")
+    progress = [li.get_text(strip=True) for li in viz.select("[data-llm-progress-item]")]
+    assert len(progress) == 9, f"{page}: expected 9 walkthrough phases, got {progress}"
+    html = str(soup)
+    for forbidden in (
+        "LIVE TRANSFORMER VISUALIZATION",
+        "VISUALIZACIÓN EN VIVO DE UN TRANSFORMER",
+        "3 layers · 3 attention heads · 48-dimensional embeddings",
+        "3 capas · 3 cabezas de atención · embeddings de 48 dimensiones",
+        "A real tiny GPT-style model sorting A/B/C tokens.",
+        "Un pequeño modelo real de estilo GPT ordenando tokens A/B/C.",
+        "llm-viz-meta",
+        "llm-viz-overlay",
+        "llm-viz-disclaimer",
+        "llm-tech-explain",
+    ):
+        assert forbidden not in html, f"{page}: must not contain {forbidden!r}"
 
 
 @pytest.mark.parametrize("page", LLM_VIZ_PAGES)
@@ -1016,14 +1028,29 @@ def test_llm_viz_never_calls_upstream_origins_in_production():
             assert host not in source, f"{target.name} must not reference {host}"
 
 
-def test_llm_viz_states_the_real_model_shape():
-    for page, expected in [
-        ("/", ["3 layers", "3 attention heads", "48-dimensional"]),
-        ("/es/", ["3 capas", "3 cabezas de atención", "48 dimensiones"]),
-    ]:
-        dims = _viz(soup_of(page)).select_one(".llm-viz-dims").get_text(" ", strip=True)
-        for fragment in expected:
-            assert fragment in dims, f"{page}: model dimensions must state {fragment!r}, got {dims!r}"
+def test_llm_viz_katex_is_local_and_only_on_visualization_pages():
+    katex_dir = SITE_ROOT / "vendor" / "katex"
+    assert (katex_dir / "katex.mjs").is_file()
+    assert (katex_dir / "katex.min.css").is_file()
+    assert (katex_dir / "fonts").is_dir()
+    assert any((katex_dir / "fonts").iterdir()), "KaTeX fonts must be published"
+
+    for page in LLM_VIZ_PAGES:
+        soup = soup_of(page)
+        assert soup.find("link", rel="stylesheet", href="/vendor/katex/katex.min.css"), (
+            f"{page}: visualization pages must load local KaTeX CSS"
+        )
+    for page in [p for p in EXPECTED_PAGES if p not in LLM_VIZ_PAGES]:
+        soup = soup_of(page)
+        assert not soup.find("link", href="/vendor/katex/katex.min.css"), (
+            f"{page}: pages without the visualization must not load KaTeX"
+        )
+
+
+def test_llm_viz_program_does_not_draw_the_model_card():
+    source = (REPO_ROOT / "features" / "llm-visualization" / "upstream" / "src" / "llm" / "Program.ts").read_text(encoding="utf-8")
+    assert "drawModelCard(" not in source
+    assert "applyDeveloStage" not in source
 
 
 def test_llm_viz_asset_urls_are_pinned_to_the_upstream_commit():

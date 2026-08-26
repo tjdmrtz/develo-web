@@ -34,3 +34,13 @@ The generated runtime atlas (`font-atlas.png`, `font-def.json`) copied
 from bbycroft/llm-viz is derived from third-party fonts. See:
 
 third_party/bbycroft-llm-viz-font-atlas/NOTICE.md
+
+## KaTeX
+
+Version: 0.18.1
+License: MIT
+Copyright (c) 2013-2020 Khan Academy and other contributors
+Used for local mathematical typesetting in the Develo transformer visualization.
+
+The full MIT license text is preserved in:
+third_party/katex/LICENSE

@@ -15,7 +15,17 @@ const RUNTIME_ASSETS = [
   "/llm-viz/bycroft-9da9374/gpt-nano-sort-t0-partials.json",
   "/llm-viz/bycroft-9da9374/native.wasm",
 ];
-const STAGES = ["tokens", "embedding", "qkv", "attention", "transformer", "output", "prediction"];
+const STAGES = [
+  "intro",
+  "embedding",
+  "layerNorm",
+  "selfAttention",
+  "projection",
+  "mlp",
+  "transformer",
+  "softmax",
+  "output",
+];
 
 function findChrome() {
   for (const name of ["google-chrome", "chromium", "chromium-browser"]) {
@@ -195,7 +205,7 @@ async function testLazyLoading(browser, base) {
   await page.close();
 }
 
-// --- 91: autoplay with an injected clock ---------------------------------
+// --- 91: autoplay with a test-only speed multiplier ----------------------
 async function testAutoplay(browser, base) {
   const { page, errors } = await openPage(browser);
   await page.goto(base + "/", { waitUntil: "domcontentloaded", timeout: 60000 });
@@ -203,53 +213,45 @@ async function testAutoplay(browser, base) {
   await scrollToViz(page);
   await waitReady(page);
 
-  const seen = await page.evaluate(() => {
-    const el = document.querySelector("[data-llm-viz]");
-    const viz = el.__develoLlmViz;
-    let t = 0;
-    let nextId = 1;
-    const frames = new Map();
-    viz.setClock({
-      now: () => t,
-      requestFrame(cb) { const id = nextId++; frames.set(id, cb); return id; },
-      cancelFrame(id) { frames.delete(id); },
-    });
-    const flush = () => {
-      for (let i = 0; i < 4; i++) {
-        const pending = [...frames.entries()];
-        frames.clear();
-        for (const [, cb] of pending) cb(t);
-      }
-    };
-    const order = [];
-    const record = () => {
-      const stage = viz.getStage();
-      if (order[order.length - 1] !== stage) order.push(stage);
-    };
-    viz.replay();
-    flush();
-    record();
-    for (let step = 0; step < 80; step++) {
-      t += 200;
-      flush();
-      record();
-    }
-    return { order, title: el.querySelector("[data-llm-stage-title]").textContent, playback: viz.getPlayback(), stage: viz.getStage() };
-  });
+  await api(page, (viz) => viz.setPlaybackSpeedForTests(20));
+  const deadline = Date.now() + 40000;
+  while (Date.now() < deadline) {
+    const snap = await api(page, (viz) => ({
+      playback: viz.getPlayback(),
+      complete: viz.getWalkthrough()?.complete,
+    }));
+    if (snap.playback === "idle" && snap.complete) break;
+    await new Promise((r) => setTimeout(r, 80));
+  }
+  const last = await api(page, (viz) => ({
+    playback: viz.getPlayback(),
+    complete: viz.getWalkthrough()?.complete,
+    order: viz.getSeenPhases(),
+    cues: viz.getSeenMathCues(),
+  }));
+  const order = last.order || [];
+  const cues = new Set(last.cues || []);
 
-  check("91 first stage is tokens", seen.order[0] === "tokens", JSON.stringify(seen.order));
-  const sequence = seen.order.filter((s) => STAGES.includes(s));
-  check("91 stages advance in order", JSON.stringify(sequence) === JSON.stringify(STAGES), JSON.stringify(seen.order));
-  check("91 timeline settles on idle", seen.stage === "idle" && seen.playback === "idle", JSON.stringify(seen));
-  check("91 stage label follows the clock", /overview/i.test(seen.title) || /general/i.test(seen.title), seen.title);
+  check("91 first stage is intro", order[0] === "intro", JSON.stringify(order));
+  const sequence = order.filter((s) => STAGES.includes(s));
+  check("91 stages advance in order", JSON.stringify(sequence) === JSON.stringify(STAGES), JSON.stringify(order));
+  check("91 timeline settles on idle", last.playback === "idle" && last.complete, JSON.stringify({ playback: last.playback, complete: last.complete }));
 
-  // Leaving and re-entering the viewport must not restart the story.
+  const requiredCues = [
+    "embedding_token", "embedding_sum", "layernorm_mean", "layernorm_variance",
+    "attention_qkv", "attention_dot", "attention_softmax", "attention_weighted_value",
+    "projection_concat", "projection_residual", "mlp_gelu", "transformer_block",
+    "softmax_stable", "output_logits", "output_probabilities", "output_argmax",
+  ];
+  const missing = requiredCues.filter((c) => !cues.has(c));
+  check("72 math cues follow the choreography", missing.length === 0, missing.join(",") || [...cues].join(","));
+
   await page.evaluate(() => window.scrollTo({ top: 0, behavior: "instant" }));
   await new Promise((r) => setTimeout(r, 400));
   await scrollToViz(page);
   await new Promise((r) => setTimeout(r, 600));
-  const after = await api(page, (viz) => ({ playback: viz.getPlayback(), stage: viz.getStage() }));
-  check("91 does not autoplay again on re-entry", after.playback !== "playing", JSON.stringify(after));
+  const after = await api(page, (viz) => ({ playback: viz.getPlayback(), running: viz.getWalkthrough()?.running }));
+  check("91 does not autoplay again on re-entry", after.playback !== "playing" && !after.running, JSON.stringify(after));
   check("96 autoplay: clean console", errors.length === 0, errors.join(" | "));
   await page.close();
 }
@@ -311,21 +313,25 @@ async function testExploreResetReplay(browser, base) {
     return {
       playback: el.__develoLlmViz.getPlayback(),
       stage: el.__develoLlmViz.getStage(),
-      title: el.querySelector("[data-llm-stage-title]").textContent,
       resetHidden: el.querySelector("[data-llm-reset]").hidden,
       focused: document.activeElement === el.querySelector("[data-llm-explore]"),
     };
   });
-  check("92 reset returns to the overview", reset.playback === "idle" && reset.stage === "idle", JSON.stringify(reset));
+  check("92 reset returns to the overview", reset.playback === "idle", JSON.stringify(reset));
   check("92 reset hides itself and restores focus", reset.resetHidden && reset.focused);
 
+  await api(page, (viz) => viz.setPlaybackSpeedForTests(20));
   await page.click("[data-llm-replay]");
   await new Promise((r) => setTimeout(r, 500));
   const replay = await api(page, (viz) => ({ playback: viz.getPlayback(), stage: viz.getStage() }));
-  check("92 replay restarts at tokens", replay.stage === "tokens" && replay.playback === "playing", JSON.stringify(replay));
-  await new Promise((r) => setTimeout(r, 2000));
-  const advanced = await api(page, (viz) => viz.getStage());
-  check("92 replayed timeline advances", advanced !== "tokens", advanced);
+  check("92 replay restarts at intro", replay.stage === "intro" && replay.playback === "playing", JSON.stringify(replay));
+  const replayDeadline = Date.now() + 8000;
+  let advanced = replay.stage;
+  while (Date.now() < replayDeadline && advanced === "intro") {
+    await new Promise((r) => setTimeout(r, 80));
+    advanced = await api(page, (viz) => viz.getStage());
+  }
+  check("92 replayed timeline advances", advanced !== "intro", advanced);
 
   // Escape must leave the local interactive state without trapping the keyboard.
   await page.focus("[data-llm-explore]");
@@ -355,7 +361,7 @@ async function testReducedMotion(browser, base) {
       replayHidden: el.querySelector("[data-llm-replay]").hidden,
     };
   });
-  check("93 no automatic stage sequence", idle.playback !== "playing" && idle.stage === "idle", JSON.stringify(idle));
+  check("93 no automatic stage sequence", idle.playback !== "playing" && (idle.stage === "intro" || idle.stage === "idle"), JSON.stringify(idle));
   check("93 explore and replay stay available", !idle.exploreHidden && !idle.replayHidden, JSON.stringify(idle));
 
   await page.click("[data-llm-explore]");
@@ -503,8 +509,14 @@ async function testIdleRaf(browser, base) {
   await page.waitForSelector("[data-llm-viz]");
   await scrollToViz(page);
   await waitReady(page);
-  // Wait out the intro timeline, then measure how many frames are still asked for.
-  await new Promise((r) => setTimeout(r, 16000));
+  await api(page, (viz) => viz.setPlaybackSpeedForTests(20));
+  const deadline = Date.now() + 40000;
+  while (Date.now() < deadline) {
+    const snap = await api(page, (viz) => ({ playback: viz.getPlayback(), complete: viz.getWalkthrough()?.complete }));
+    if (snap.playback === "idle" && snap.complete) break;
+    await new Promise((r) => setTimeout(r, 80));
+  }
+  await new Promise((r) => setTimeout(r, 800));
   const first = await page.evaluate(() => window.__rafCount);
   await new Promise((r) => setTimeout(r, 2000));
   const second = await page.evaluate(() => window.__rafCount);
@@ -530,6 +542,63 @@ async function testIdleRaf(browser, base) {
   check("110 no frames requested after cleanup", afterDestroy2 - afterDestroy <= 2, `${afterDestroy2 - afterDestroy}`);
   check("96 idle: clean console", errors.length === 0, errors.join(" | "));
   await page.close();
+}
+
+async function testCleanUi(browser, base) {
+  const { page, errors } = await openPage(browser, { viewport: { width: 1600, height: 900 } });
+  await page.goto(base + "/", { waitUntil: "domcontentloaded", timeout: 60000 });
+  await page.waitForSelector("[data-llm-viz]");
+  await scrollToViz(page);
+  await waitReady(page);
+  await new Promise((r) => setTimeout(r, 1200));
+
+  const chrome = await page.evaluate(() => {
+    const shell = document.querySelector(".llm-viz-shell");
+    const cs = getComputedStyle(shell);
+    const canvas = document.querySelector("[data-llm-canvas]");
+    const math = document.querySelector(".llm-viz-math");
+    const cr = canvas.getBoundingClientRect();
+    const mr = math.getBoundingClientRect();
+    return {
+      borderTop: cs.borderTopWidth,
+      borderRight: cs.borderRightWidth,
+      borderBottom: cs.borderBottomWidth,
+      borderLeft: cs.borderLeftWidth,
+      background: cs.backgroundColor,
+      missing: {
+        meta: !document.querySelector(".llm-viz-meta"),
+        overlay: !document.querySelector(".llm-viz-overlay"),
+        disclaimer: !document.querySelector(".llm-viz-disclaimer"),
+        explain: !document.querySelector(".llm-tech-explain"),
+      },
+      katex: Boolean(document.querySelector("[data-llm-equation] .katex")),
+      nano: document.body.innerText.includes("nano-gpt"),
+      overlap: !(mr.left >= cr.right - 1 || mr.top >= cr.bottom - 1),
+      mathRightOfCanvas: mr.left + 1 >= cr.right,
+    };
+  });
+  check("71 shell has no border", chrome.borderTop === "0px" && chrome.borderRight === "0px" && chrome.borderBottom === "0px" && chrome.borderLeft === "0px", JSON.stringify(chrome));
+  check("71 shell background is transparent", chrome.background === "rgba(0, 0, 0, 0)" || chrome.background === "transparent", chrome.background);
+  check("71 obsolete chrome is gone", chrome.missing.meta && chrome.missing.overlay && chrome.missing.disclaimer && chrome.missing.explain, JSON.stringify(chrome.missing));
+  check("71 KaTeX rendered", chrome.katex);
+  check("68 no nano-gpt card text", chrome.nano === false);
+  check("71 math does not cover canvas", chrome.overlap === false);
+  check("71 at 1600px math is to the right", chrome.mathRightOfCanvas, JSON.stringify(chrome));
+  check("96 clean UI: clean console", errors.length === 0, errors.join(" | "));
+  await page.close();
+
+  const narrow = await openPage(browser, { viewport: { width: 1440, height: 900 } });
+  await narrow.page.goto(base + "/", { waitUntil: "domcontentloaded", timeout: 60000 });
+  await narrow.page.waitForSelector("[data-llm-viz]");
+  await scrollToViz(narrow.page);
+  await waitReady(narrow.page);
+  const below = await narrow.page.evaluate(() => {
+    const canvas = document.querySelector("[data-llm-canvas]").getBoundingClientRect();
+    const math = document.querySelector(".llm-viz-math").getBoundingClientRect();
+    return math.top + 1 >= canvas.bottom;
+  });
+  check("71 at 1440px math is below the canvas", below);
+  await narrow.page.close();
 }
 
 (async () => {
@@ -564,6 +633,7 @@ async function testIdleRaf(browser, base) {
     await testMobileScroll(browser, base);
     await testNetworkFailureFallback(browser, base);
     await testIdleRaf(browser, base);
+    await testCleanUi(browser, base);
   } finally {
     await browser.close();
   }
