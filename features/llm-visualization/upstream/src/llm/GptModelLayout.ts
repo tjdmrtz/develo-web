@@ -903,7 +903,8 @@ export function genGptModelLayout(shape: IModelShape, gptGpuModel: IGptModelLink
 
     // let decoderCount = vocabSize * C; (excluded from the weight count apparently)
 
-    cubes.push(lmHeadWeight, logits, logitsAgg1, logitsAgg2, logitsSoftmax);
+    // Computational order: max aggregation, then shifted exp/sum, then normalize.
+    cubes.push(lmHeadWeight, logits, logitsAgg2, logitsAgg1, logitsSoftmax);
 
     for (let i = 0; i < cubes.length; i++) {
         cubes[i].idx = i;

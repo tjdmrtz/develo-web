@@ -183,13 +183,25 @@ u^{(\ell)}
 \right)
 \end{aligned}`,
 
-  softmax_stable: String.raw`\begin{aligned}
-m&=\max_j z_j\\
+  softmax_max: String.raw`
+m=\max_j z_j
+`,
+
+  softmax_exp_sum: String.raw`
+S=
+\sum_j
+e^{z_j-m}
+`,
+
+  softmax_stable: String.raw`
 \operatorname{softmax}(z)_i
-&=
-\frac{e^{z_i-m}}
-{\sum_j e^{z_j-m}}
-\end{aligned}`,
+=
+\frac{
+e^{z_i-m}
+}{
+\sum_j e^{z_j-m}
+}
+`,
 
   output_final_norm: String.raw`h_t
 =

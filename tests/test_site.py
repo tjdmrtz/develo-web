@@ -1096,6 +1096,32 @@ def test_llm_viz_camera_does_not_use_a_fixed_near_plane():
     assert "10000000" not in bundle
 
 
+def test_llm_viz_transformer_and_softmax_run_real_process_flow():
+    walkthrough = REPO_ROOT / "features" / "llm-visualization" / "upstream" / "src" / "llm" / "walkthrough-develo"
+    transformer = (walkthrough / "DeveloTransformer.ts").read_text(encoding="utf-8")
+    softmax = (walkthrough / "DeveloSoftmax.ts").read_text(encoding="utf-8")
+    assert "processUpTo" in transformer
+    assert "layout.blocks[0].mlpResidual" in transformer
+    assert "layout.blocks[1].mlpResidual" in transformer
+    assert "layout.blocks[2].mlpResidual" in transformer
+    assert "processUpTo" in softmax
+    assert "layout.logitsAgg2" in softmax
+    assert "layout.logitsAgg1" in softmax
+    assert "layout.logitsSoftmax" in softmax
+
+
+def test_llm_viz_output_argmax_isolates_real_selected_cell():
+    output = (
+        REPO_ROOT / "features" / "llm-visualization" / "upstream" / "src" / "llm"
+        / "walkthrough-develo" / "DeveloOutput.ts"
+    ).read_text(encoding="utf-8")
+    assert "splitGrid" in output
+    assert "outputSelection" in output
+    assert "selection.tokenId" in output
+    assert "layout.logitsSoftmax" in output
+    assert "state.stepModel = true" in output
+
+
 def test_llm_viz_asset_urls_are_pinned_to_the_upstream_commit():
     assets = (SITE_ROOT / "js" / "llm-visualization" / "assets.js").read_text(encoding="utf-8")
     assert "/llm-viz/bycroft-9da9374" in assets, "asset URLs must stay pinned to the upstream commit"

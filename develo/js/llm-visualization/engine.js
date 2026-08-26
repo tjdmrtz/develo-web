@@ -3818,7 +3818,7 @@ function genGptModelLayout(shape, gptGpuModel = null, offset = new Vec3(0, 0, 0)
   }
   let weightCount = vocabSize * C + T * C + nBlocks * (2 * C + 4 * C * C + C + 3 * C + // self attn
   (2 * C + 4 * C + 8 * C * C + C)) + 2 * C;
-  cubes.push(lmHeadWeight, logits, logitsAgg1, logitsAgg2, logitsSoftmax);
+  cubes.push(lmHeadWeight, logits, logitsAgg2, logitsAgg1, logitsSoftmax);
   for (let i = 0; i < cubes.length; i++) {
     cubes[i].idx = i;
   }
@@ -5506,6 +5506,7 @@ function runDeveloMlp(args) {
       for (let a of findSubBlocks(col, dim1, 0, xPos)) {
         a.access.disable = false;
       }
+      void row;
     }
     if (t < 1) {
       drawDataFlow(state, blk, destIdx, pinIdx);
@@ -5553,26 +5554,71 @@ function runDeveloOutput(args) {
   if (t_finalNorm.active) {
     processUpTo(state, t_finalNorm, layout.ln_f.lnResid, processInfo);
     setMathCue(state, "output_final_norm");
+    emphasizeBlock(layout.ln_f.lnResid, t_finalNorm, 0.28);
   }
   if (t_logits.active) {
     processUpTo(state, t_logits, layout.logits, processInfo);
     setMathCue(state, "output_logits");
+    emphasizeBlock(layout.logits, t_logits, 0.32);
   }
   if (t_probabilities.active) {
     processUpTo(state, t_probabilities, layout.logitsSoftmax, processInfo);
     setMathCue(state, "output_probabilities");
+    emphasizeBlock(layout.logitsSoftmax, t_probabilities, 0.38);
   }
   if (t_nextToken.active) {
     setMathCue(state, "output_argmax");
-    if (t_nextToken.t >= 0.5) {
-      let phaseLocal = wt.phaseData.get(wt.phase) ?? {};
-      if (!phaseLocal.predictionStepped) {
-        phaseLocal.predictionStepped = true;
+    let phaseLocal = wt.phaseData.get(wt.phase) ?? {};
+    if (!phaseLocal.outputSelection) {
+      const model = state.jsGptModel;
+      if (model && model.sortedBuf) {
+        const vocabSize = model.shape.vocabSize;
+        const tIdx = Math.max(0, model.inputLen - 1);
+        const sortedIndex = tIdx * vocabSize * 2;
+        const tokenId = Math.round(model.sortedBuf[sortedIndex]);
+        phaseLocal.outputSelection = { tIdx, tokenId };
         wt.phaseData.set(wt.phase, phaseLocal);
-        state.stepModel = true;
       }
     }
+    const selection = phaseLocal.outputSelection;
+    if (selection) {
+      const pulse = Math.sin(Math.PI * Math.min(1, Math.max(0, t_nextToken.t)));
+      const splitAmount = 1.2 * pulse;
+      const probabilityColumn = splitGrid(
+        layout,
+        layout.logitsSoftmax,
+        0 /* X */,
+        selection.tIdx + 0.5,
+        splitAmount
+      );
+      if (probabilityColumn) {
+        const selectedCell = splitGrid(
+          layout,
+          probabilityColumn,
+          1 /* Y */,
+          selection.tokenId + 0.5,
+          splitAmount * 0.8
+        );
+        if (selectedCell) {
+          selectedCell.highlight = Math.max(selectedCell.highlight ?? 0, 0.55 + 0.35 * pulse);
+        }
+        probabilityColumn.highlight = Math.max(probabilityColumn.highlight ?? 0, 0.25 + 0.2 * pulse);
+      }
+    }
+    if (t_nextToken.t >= 0.72 && !phaseLocal.predictionStepped) {
+      phaseLocal.predictionStepped = true;
+      wt.phaseData.set(wt.phase, phaseLocal);
+      state.stepModel = true;
+    }
   }
+}
+function emphasizeBlock(block, timer, strength = 0.32) {
+  if (!timer.active) {
+    return;
+  }
+  const t = Math.min(1, Math.max(0, timer.t));
+  const pulse = Math.sin(Math.PI * t);
+  block.highlight = Math.max(block.highlight ?? 0, 0.12 + pulse * strength);
 }
 
 // features/llm-visualization/upstream/src/llm/walkthrough-develo/DeveloProjection.ts
@@ -6072,18 +6118,51 @@ function drawSymbolBetweenBlocks(args, block1, block2, dim, symbol, opts) {
 
 // features/llm-visualization/upstream/src/llm/walkthrough-develo/DeveloSoftmax.ts
 function runDeveloSoftmax(args) {
-  let { state, tools: { afterTime: afterTime2 } } = args;
+  let { state, layout, tools: { afterTime: afterTime2 } } = args;
   setInitialCamera(state, new Vec3(-24.35, 0, -1702.195), new Vec3(283.1, 0.6, 1.556));
-  afterTime2(null, 3);
-  setMathCue(state, "softmax_stable");
+  let t_max = afterTime2(null, 0.85, 0.1);
+  let t_expSum = afterTime2(t_max, 0.95, 0.1);
+  let t_normalize = afterTime2(t_expSum, 1, 0.2);
+  let processInfo = startProcessBefore(state, layout.logitsAgg2);
+  processInfo = processUpTo(state, t_max, layout.logitsAgg2, processInfo);
+  processInfo = processUpTo(state, t_expSum, layout.logitsAgg1, processInfo);
+  processUpTo(state, t_normalize, layout.logitsSoftmax, processInfo);
+  if (t_max.active) {
+    setMathCue(state, "softmax_max");
+  }
+  if (t_expSum.active) {
+    setMathCue(state, "softmax_exp_sum");
+  }
+  if (t_normalize.active) {
+    setMathCue(state, "softmax_stable");
+  }
 }
 
 // features/llm-visualization/upstream/src/llm/walkthrough-develo/DeveloTransformer.ts
 function runDeveloTransformer(args) {
-  let { state, tools: { afterTime: afterTime2 } } = args;
+  let { state, layout, tools: { afterTime: afterTime2 } } = args;
   setInitialCamera(state, new Vec3(-135.531, 0, -353.905), new Vec3(291.1, 13.6, 5.706));
-  afterTime2(null, 3);
   setMathCue(state, "transformer_block");
+  let t_block0 = afterTime2(null, 0.85, 0.1);
+  let t_block1 = afterTime2(t_block0, 0.85, 0.1);
+  let t_block2 = afterTime2(t_block1, 0.85, 0.25);
+  let processInfo = startProcessBefore(state, layout.blocks[0].ln1.lnResid);
+  processInfo = processUpTo(state, t_block0, layout.blocks[0].mlpResidual, processInfo);
+  processInfo = processUpTo(state, t_block1, layout.blocks[1].mlpResidual, processInfo);
+  processUpTo(state, t_block2, layout.blocks[2].mlpResidual, processInfo);
+  emphasizeTransformerBlock(layout.blocks[0], t_block0);
+  emphasizeTransformerBlock(layout.blocks[1], t_block1);
+  emphasizeTransformerBlock(layout.blocks[2], t_block2);
+}
+function emphasizeTransformerBlock(block, timer) {
+  if (!timer.active) {
+    return;
+  }
+  const pulse = Math.sin(Math.PI * Math.min(1, Math.max(0, timer.t)));
+  const highlight = 0.08 + pulse * 0.16;
+  for (const cube of block.cubes) {
+    cube.highlight = Math.max(cube.highlight ?? 0, highlight);
+  }
 }
 
 // features/llm-visualization/upstream/src/llm/walkthrough-develo/DeveloWalkthrough.ts

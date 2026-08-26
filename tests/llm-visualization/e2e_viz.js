@@ -241,7 +241,8 @@ async function testAutoplay(browser, base) {
     "embedding_token", "embedding_sum", "layernorm_mean", "layernorm_variance",
     "attention_qkv", "attention_dot", "attention_softmax", "attention_weighted_value",
     "projection_concat", "projection_residual", "mlp_gelu", "transformer_block",
-    "softmax_stable", "output_logits", "output_probabilities", "output_argmax",
+    "softmax_max", "softmax_exp_sum", "softmax_stable",
+    "output_logits", "output_probabilities", "output_argmax",
   ];
   const missing = requiredCues.filter((c) => !cues.has(c));
   check("72 math cues follow the choreography", missing.length === 0, missing.join(",") || [...cues].join(","));

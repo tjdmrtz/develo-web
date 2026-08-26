@@ -43,7 +43,7 @@ test("math cues are notation only", async () => {
     "attention_softmax", "attention_weighted_value",
     "projection_concat", "projection_linear", "projection_residual",
     "mlp_norm", "mlp_expand", "mlp_gelu", "mlp_project", "mlp_residual",
-    "transformer_block", "softmax_stable",
+    "transformer_block", "softmax_max", "softmax_exp_sum", "softmax_stable",
     "output_final_norm", "output_logits", "output_probabilities", "output_argmax",
   ];
   for (const id of required) {
@@ -59,6 +59,12 @@ test("math cues are notation only", async () => {
   assert.match(MATH_CUES.attention_score, /\\sqrt\{A\}/);
   assert.match(MATH_CUES.attention_softmax, /\\alpha_\{t,j\}/);
   assert.match(MATH_CUES.mlp_gelu, /\\operatorname\{GELU\}/);
+  assert.match(MATH_CUES.softmax_max, /\\max/);
+  assert.match(MATH_CUES.softmax_exp_sum, /\\sum/);
+  assert.match(MATH_CUES.softmax_exp_sum, /e\^/);
+  assert.match(MATH_CUES.softmax_stable, /\\operatorname\{softmax\}/);
+  assert.match(MATH_CUES.softmax_stable, /e\^\{z_i-m\}/);
+  assert.match(MATH_CUES.softmax_stable, /\\sum_j e\^\{z_j-m\}/);
   assert.match(MATH_CUES.output_argmax, /arg\\,max/);
 });
 
