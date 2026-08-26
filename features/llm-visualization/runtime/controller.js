@@ -62,6 +62,11 @@ export class DeveloLlmVizController {
     this.exploreBtn = root.querySelector("[data-llm-explore]");
     this.resetBtn = root.querySelector("[data-llm-reset]");
     this.replayBtn = root.querySelector("[data-llm-replay]");
+    this.speedInput = root.querySelector("[data-llm-speed]");
+    this.speedValueEl = root.querySelector("[data-llm-speed-value]");
+    this.selectedSpeed = 1.0;
+    this.pausedBySpeed = false;
+    this.testSpeedOverride = null;
     this.progressItems = [...root.querySelectorAll("[data-llm-progress-item]")];
     this.reducedMotion = false;
     this.resizeObserver = null;
@@ -80,6 +85,7 @@ export class DeveloLlmVizController {
     this.onPointerMove = this.onPointerMove.bind(this);
     this.onPointerUp = this.onPointerUp.bind(this);
     this.onKeyDown = this.onKeyDown.bind(this);
+    this.onSpeedInput = this.onSpeedInput.bind(this);
 
     this.bindUi();
     this.bindLifecycle();
@@ -90,9 +96,11 @@ export class DeveloLlmVizController {
     this.exploreBtn?.addEventListener("click", (ev) => this.explore(ev));
     this.resetBtn?.addEventListener("click", (ev) => this.reset(ev));
     this.replayBtn?.addEventListener("click", () => this.replay());
+    this.speedInput?.addEventListener("input", this.onSpeedInput);
     this.shell?.addEventListener("pointerdown", this.onPointerDown);
     // Scoped to the section: the feature must not add document-global key listeners.
     this.root.addEventListener("keydown", this.onKeyDown);
+    this.updateSpeedUi();
     this.setControls("passive");
   }
 
@@ -200,6 +208,7 @@ export class DeveloLlmVizController {
       this.progState.jsGptModel = engine.createGpuModelForWasm(this.progState.render.gl, model.config);
       this.progState.gptGpuModel = engine.initModel(this.progState.render, { data, model, native }, 1);
 
+      this.engine.setDeveloWalkthroughSpeed(this.progState, this.effectiveSpeed());
       this.resize();
       this.applyHomeCamera(true);
       engine.runProgram({ time: this.clock.now(), dt: 16, markDirty: () => this.markDirty() }, this.progState);
@@ -238,11 +247,18 @@ export class DeveloLlmVizController {
     this.completeAt = null;
     this.returningHome = false;
     this.homeLerp = null;
-    this.timelinePlaying = true;
-    this.playback = "playing";
     this.progState.interactive = false;
+    this.engine.setDeveloWalkthroughSpeed(this.progState, this.effectiveSpeed());
     this.engine.startDeveloWalkthrough(this.progState);
     this.setControls("playing");
+    if (this.effectiveSpeed() === 0) {
+      this.pausedBySpeed = true;
+      this.pausePlayback("paused-speed");
+      return;
+    }
+    this.pausedBySpeed = false;
+    this.timelinePlaying = true;
+    this.playback = "playing";
     this.markDirty();
   }
 
@@ -253,8 +269,18 @@ export class DeveloLlmVizController {
     this.markDirty();
   }
 
+  effectiveSpeed() {
+    return this.testSpeedOverride != null ? this.testSpeedOverride : this.selectedSpeed;
+  }
+
   resumePlayback() {
     if (!this.engine || !this.progState) return;
+    if (this.effectiveSpeed() === 0) {
+      this.playback = "paused-speed";
+      this.timelinePlaying = false;
+      this.pausedBySpeed = true;
+      return;
+    }
     const snap = this.engine.getDeveloWalkthroughSnapshot(this.progState);
     if (snap.complete) return;
     this.engine.startDeveloWalkthrough(this.progState);
@@ -383,6 +409,35 @@ export class DeveloLlmVizController {
       this.hintEl.hidden = !interactive;
     }
     if (this.shell) this.shell.style.touchAction = interactive ? "none" : "pan-y";
+    if (this.speedInput) this.speedInput.disabled = this.status !== "ready";
+  }
+
+  updateSpeedUi() {
+    if (this.speedInput) this.speedInput.value = String(this.selectedSpeed);
+    if (this.speedValueEl) this.speedValueEl.textContent = `${this.selectedSpeed.toFixed(1)}×`;
+  }
+
+  onSpeedInput() {
+    if (!this.speedInput) return;
+    const raw = Number(this.speedInput.value);
+    const speed = Math.min(2.5, Math.max(0, Number.isFinite(raw) ? raw : 1));
+    this.selectedSpeed = speed;
+    this.testSpeedOverride = null;
+    this.updateSpeedUi();
+    if (this.engine && this.progState) {
+      this.engine.setDeveloWalkthroughSpeed(this.progState, speed);
+    }
+    if (speed === 0) {
+      if (this.playback === "playing") {
+        this.pausedBySpeed = true;
+        this.pausePlayback("paused-speed");
+      }
+      return;
+    }
+    if (this.playback === "paused-speed" && this.pausedBySpeed) {
+      this.pausedBySpeed = false;
+      this.resumePlayback();
+    }
   }
 
   updateWalkthroughUi(snapshot) {
@@ -572,6 +627,7 @@ ${fmt(byToken.A)} & ${fmt(byToken.B)} & ${fmt(byToken.C)}
       getSeenMathCues: () => this.seenMathCues.slice(),
       getCamera: () => this.progState && this.progState.camera,
       setPlaybackSpeedForTests: (multiplier) => {
+        this.testSpeedOverride = multiplier;
         if (this.engine && this.progState) this.engine.setDeveloWalkthroughSpeed(this.progState, multiplier);
       },
       setClock: (clock) => {

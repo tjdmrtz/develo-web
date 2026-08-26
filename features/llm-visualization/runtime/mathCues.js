@@ -1,17 +1,13 @@
 export const MATH_CUES = {
-  intro_tokens: String.raw`\begin{aligned}
-\tau(A)&=0\\
-\tau(B)&=1\\
-\tau(C)&=2\\[2pt]
-\mathbf{i}&=(2,1,0,1,1,2)
-\end{aligned}`,
+  intro_tokens: String.raw`
+\texttt{<develo>}
+`,
 
-  intro_indices: String.raw`\begin{aligned}
-\tau(A)&=0\\
-\tau(B)&=1\\
-\tau(C)&=2\\[2pt]
-\mathbf{i}&=(2,1,0,1,1,2)
-\end{aligned}`,
+  intro_indices: String.raw`
+\texttt{<develo>}
+\longrightarrow
+\mathbf{x}_0
+`,
 
   intro_embedding: String.raw`x_t
 =

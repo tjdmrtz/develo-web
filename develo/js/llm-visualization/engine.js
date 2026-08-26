@@ -965,6 +965,28 @@ function base64ToArrayBuffer(base64) {
 }
 
 // features/llm-visualization/upstream/src/llm/Camera.ts
+var BASE_VERTICAL_FOV_DEG = 40;
+var REFERENCE_CAMERA_ASPECT = 1.6;
+var MIN_NEAR_PLANE = 0.1;
+var FAR_PLANE_FLOOR = 1e5;
+function computeProjectionParams(cameraZoom, width, height, localDist) {
+  const safeWidth = Math.max(1, width);
+  const safeHeight = Math.max(1, height);
+  const aspect = safeWidth / safeHeight;
+  const dist = Math.max(1e-3, 200 * cameraZoom);
+  const near = Math.max(MIN_NEAR_PLANE, dist / 100);
+  const far = localDist + Math.max(dist * 2, FAR_PLANE_FLOOR);
+  const baseHalfFovRad = BASE_VERTICAL_FOV_DEG * Math.PI / 360;
+  let fovDeg = BASE_VERTICAL_FOV_DEG;
+  if (aspect < REFERENCE_CAMERA_ASPECT) {
+    const adjustedHalfFov = Math.atan(
+      Math.tan(baseHalfFovRad) * REFERENCE_CAMERA_ASPECT / aspect
+    );
+    fovDeg = adjustedHalfFov * 360 / Math.PI;
+  }
+  fovDeg = Math.min(90, Math.max(BASE_VERTICAL_FOV_DEG, fovDeg));
+  return { fovDeg, aspect, near, far, dist };
+}
 function cameraToMatrixView(camera) {
   while (camera.angle.x < 0) camera.angle.x += 360;
   while (camera.angle.x > 360) camera.angle.x -= 360;
@@ -993,8 +1015,18 @@ function genModelViewMatrices(state, layout, modelOffset = Vec3.zero) {
   }
   let localDist = bb.size().len();
   let { lookAt, camPos } = cameraToMatrixView(camera);
-  let dist = 200 * camera.angle.z;
-  let persp = Mat4f.fromPersp(40, state.render.size.x / state.render.size.y, 100, 1e7);
+  const projection = computeProjectionParams(
+    camera.angle.z,
+    state.render.size.x,
+    state.render.size.y,
+    localDist
+  );
+  const persp = Mat4f.fromPersp(
+    projection.fovDeg,
+    projection.aspect,
+    projection.near,
+    projection.far
+  );
   let viewMtx = persp.mul(lookAt);
   let modelMtx = new Mat4f();
   modelMtx[0] = 1;
@@ -3821,6 +3853,14 @@ function genGptModelLayout(shape, gptGpuModel = null, offset = new Vec3(0, 0, 0)
 }
 
 // features/llm-visualization/upstream/src/llm/components/Tokens.ts
+var DEVELO_VISIBLE_INPUT_LABELS = [
+  "<d",
+  "e",
+  "v",
+  "e",
+  "l",
+  "o>"
+];
 function drawTokens(renderState, layout, display, data, count) {
   let { modelFontBuf: fontBuf, lineRender } = renderState;
   data = data ?? layout.model?.inputTokens?.localBuffer ?? new Float32Array([0, 1, 2]);
@@ -3841,7 +3881,7 @@ function drawTokens(renderState, layout, display, data, count) {
     if (i >= count) {
       break;
     }
-    let str = tokenIndexToString(a);
+    let str = i < DEVELO_VISIBLE_INPUT_LABELS.length ? DEVELO_VISIBLE_INPUT_LABELS[i] : tokenIndexToString(a);
     let w = measureTextWidth(fontBuf, str, upperFontSize);
     let w2 = measureTextWidth(fontBuf, "" + a, lowerFontSize);
     strParts.push({ str, val: a, w, offset: strOffset, w2, idxOffset, i });
@@ -8676,12 +8716,15 @@ function createCopyOutputToInputLayer(layerBuilder, prevOutput, currInput) {
   };
 }
 export {
+  BASE_VERTICAL_FOV_DEG,
   LLM_VIZ_ASSET_BASE,
   NANO_SHAPE,
+  REFERENCE_CAMERA_ASPECT,
   TensorF32,
   Vec3,
   Vec4,
   cameraToMatrixView,
+  computeProjectionParams,
   constructModel,
   createGpuModelForWasm,
   fetchFontAtlasData,

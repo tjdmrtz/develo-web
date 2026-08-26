@@ -922,15 +922,9 @@ a.card:hover { color: var(--paper); background: var(--blue); border-color: rgba(
 }
 .llm-viz-experience {
   display: grid;
-  grid-template-columns: 1fr;
+  grid-template-columns: minmax(0, 1fr);
   gap: clamp(1rem, 2vw, 1.5rem);
   align-items: center;
-}
-@media (min-width: 1500px) {
-  .llm-viz-experience {
-    grid-template-columns: minmax(0, 1fr) minmax(230px, 280px);
-    gap: clamp(1.25rem, 2vw, 2rem);
-  }
 }
 
 .llm-viz-stage {
@@ -1002,10 +996,21 @@ a.card:hover { color: var(--paper); background: var(--blue); border-color: rgba(
   font-size: .74rem;
   font-weight: 700;
 }
+.llm-viz-brand-input {
+  color: var(--blue-soft);
+  font-family: var(--mono);
+  font-size: 1rem;
+  font-weight: 700;
+  letter-spacing: .04em;
+  border: 0;
+  min-width: 0;
+}
 
 .llm-viz-math {
+  width: min(100%, 38rem);
   min-width: 0;
-  min-height: 7rem;
+  min-height: 6rem;
+  justify-self: end;
   display: flex;
   flex-direction: column;
   justify-content: center;
@@ -1019,9 +1024,6 @@ a.card:hover { color: var(--paper); background: var(--blue); border-color: rgba(
 .llm-viz-equation .katex-display { margin: 0; }
 .llm-viz-equation .katex { font-size: clamp(1rem, 1.2vw, 1.3rem); }
 .llm-viz-math-values .katex { color: var(--orange); font-size: .95rem; }
-@media (max-width: 1499px) {
-  .llm-viz-math { max-width: 48rem; }
-}
 .llm-viz-hint { margin: 0; color: var(--orange); font-family: var(--mono); font-size: .66rem; }
 
 .llm-viz-controls {
@@ -1047,11 +1049,43 @@ a.card:hover { color: var(--paper); background: var(--blue); border-color: rgba(
 .llm-viz-buttons .btn { border: 0; cursor: pointer; }
 .llm-viz-buttons .btn:focus-visible { outline: 2px solid var(--blue-soft); outline-offset: 2px; }
 
+.llm-viz-speed {
+  display: grid;
+  grid-template-columns: auto minmax(120px, 210px) 3.5rem;
+  align-items: center;
+  gap: .65rem;
+  color: rgba(255,255,255,.65);
+  font-family: var(--mono);
+  font-size: .62rem;
+}
+.llm-viz-speed-label { white-space: nowrap; }
+.llm-viz-speed-value {
+  min-width: 3.5rem;
+  color: var(--orange);
+  font-family: var(--mono);
+  text-align: right;
+}
+.llm-viz-speed input[type="range"] {
+  width: 100%;
+  margin: 0;
+  accent-color: var(--orange);
+  cursor: pointer;
+}
+.llm-viz-speed input[type="range"]:focus-visible {
+  outline: 2px solid var(--blue-soft);
+  outline-offset: 4px;
+}
+
 @media (max-width: 900px) {
   .llm-tech { grid-template-columns: 1fr; gap: 2rem; }
   .llm-viz-stage { height: clamp(420px, 112vw, 560px); min-height: 420px; }
   .llm-viz-controls { justify-content: flex-start; }
   .llm-viz-buttons .btn { min-height: 44px; }
+  .llm-viz-speed {
+    grid-template-columns: auto minmax(100px, 1fr) 3.5rem;
+    width: 100%;
+    max-width: 360px;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {

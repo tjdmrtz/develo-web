@@ -329,17 +329,20 @@ LLM_VIZ = {
         "stack": "AWS · Amazon Bedrock · LLMs · RAG · AI Agents · MCP",
         "cta": "View our technology stack",
         "cta_href": "/technologies/",
-        "explore": "Explore how it works",
+        "explore": "360°",
+        "explore_aria": "Explore the transformer in 360 degrees",
         "reset": "Reset",
         "replay": "Replay",
+        "speed": "Speed",
+        "speed_aria": "Animation speed",
         "unavailable": (
             "Interactive model visualization is unavailable in this browser. "
             "The transformer flow is shown in a simplified static view."
         ),
         "region": (
             "Interactive visualization of a small three-layer GPT-style transformer "
-            "processing and sorting A, B and C tokens through embeddings, "
-            "self-attention, transformer layers and next-token probabilities."
+            "showing embeddings, normalization, self-attention, projection, "
+            "feed-forward transformations and output probabilities."
         ),
         "progress": ["Input", "Embedding", "Layer Norm", "Self-Attention",
                      "Projection", "MLP", "Transformer", "Softmax", "Output"],
@@ -359,9 +362,12 @@ LLM_VIZ = {
         "stack": "AWS · Amazon Bedrock · LLMs · RAG · Agentes de IA · MCP",
         "cta": "Ver nuestra tecnología",
         "cta_href": "/es/technologies/",
-        "explore": "Explorar cómo funciona",
+        "explore": "360°",
+        "explore_aria": "Explorar el transformer en 360 grados",
         "reset": "Restablecer",
         "replay": "Repetir",
+        "speed": "Velocidad",
+        "speed_aria": "Velocidad de la animación",
         "unavailable": (
             "La visualización interactiva del modelo no está disponible en este "
             "navegador. El flujo del transformer se muestra en una vista estática "
@@ -369,8 +375,8 @@ LLM_VIZ = {
         ),
         "region": (
             "Visualización interactiva de un pequeño transformer de estilo GPT de "
-            "tres capas que procesa y ordena tokens A, B y C mediante embeddings, "
-            "self-attention, capas transformer y probabilidades del próximo token."
+            "tres capas que muestra embeddings, normalización, self-attention, "
+            "proyección, transformaciones feed-forward y probabilidades de salida."
         ),
         "progress": ["Entrada", "Embedding", "Layer Norm", "Self-Attention",
                      "Proyección", "MLP", "Transformer", "Softmax", "Output"],
@@ -381,8 +387,9 @@ LLM_VIZ = {
     },
 }
 
-# The pinned upstream demo input: tokens [2, 1, 0, 1, 1, 2] under 0->A, 1->B, 2->C.
-LLM_VIZ_INPUT_TOKENS = ("C", "B", "A", "B", "B", "C")
+# Visible branded input for the six token positions. The real model input
+# remains [2, 1, 0, 1, 1, 2] (CBABBC) inside WASM.
+LLM_VIZ_INPUT_DISPLAY = "<develo>"
 LLM_VIZ_OUTPUT_TOKENS = ("A", "B", "C")
 
 
@@ -396,7 +403,7 @@ def render_llm_viz(page: dict, block: dict) -> str:
     copy = LLM_VIZ[lang]
     variant = block.get("variant", "home")
 
-    input_cells = "".join(f"<span>{tok}</span>" for tok in LLM_VIZ_INPUT_TOKENS)
+    input_display = f'<span class="llm-viz-brand-input">{esc(LLM_VIZ_INPUT_DISPLAY)}</span>'
     output_cells = "".join(f"<span>{tok}</span>" for tok in LLM_VIZ_OUTPUT_TOKENS)
     steps = "".join(f"<li>{display_text(step)}</li>" for step in copy["diagram_steps"])
     progress = "".join(
@@ -421,7 +428,7 @@ def render_llm_viz(page: dict, block: dict) -> str:
               <ol class="llm-viz-diagram" aria-label="{esc(copy["diagram_label"])}">
                 <li class="llm-viz-diagram-tokens">
                   <span class="llm-viz-diagram-label">{display_text(copy["diagram_input"])}</span>
-                  <span class="llm-viz-cells">{input_cells}</span>
+                  <span class="llm-viz-cells">{input_display}</span>
                 </li>
                 {steps}
                 <li class="llm-viz-diagram-tokens">
@@ -439,8 +446,13 @@ def render_llm_viz(page: dict, block: dict) -> str:
         </div>
         <div class="llm-viz-controls">
           <ol class="llm-viz-progress" aria-hidden="true">{progress}</ol>
+          <label class="llm-viz-speed">
+            <span class="llm-viz-speed-label">{display_text(copy["speed"])}</span>
+            <input type="range" min="0" max="2.5" step="0.1" value="1" data-llm-speed aria-label="{esc(copy["speed_aria"])}" disabled>
+            <output class="llm-viz-speed-value" data-llm-speed-value>1.0×</output>
+          </label>
           <div class="llm-viz-buttons">
-            <button type="button" class="btn btn-small" data-llm-explore hidden>{display_text(copy["explore"])}</button>
+            <button type="button" class="btn btn-small" data-llm-explore aria-label="{esc(copy["explore_aria"])}" title="{esc(copy["explore_aria"])}" hidden>{display_text(copy["explore"])}</button>
             <button type="button" class="btn btn-small" data-llm-reset hidden>{display_text(copy["reset"])}</button>
             <button type="button" class="btn btn-small" data-llm-replay hidden>{display_text(copy["replay"])}</button>
           </div>

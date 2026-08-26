@@ -280,6 +280,8 @@ async function testExploreResetReplay(browser, base) {
     };
   });
   check("92 explore enters interactive mode", interactive.playback === "interactive", JSON.stringify(interactive));
+  const exploreLabel = await page.$eval("[data-llm-explore]", (el) => el.textContent.trim());
+  check("46 explore button says 360°", exploreLabel === "360°", exploreLabel);
   check("92 reset replaces explore in interactive mode", interactive.exploreHidden && !interactive.resetHidden);
   check("92 drag hint is announced", interactive.hint.length > 0, interactive.hint);
   check("87 keyboard activation keeps focus inside the section", interactive.focused);
@@ -574,7 +576,9 @@ async function testCleanUi(browser, base) {
       katex: Boolean(document.querySelector("[data-llm-equation] .katex")),
       nano: document.body.innerText.includes("nano-gpt"),
       overlap: !(mr.left >= cr.right - 1 || mr.top >= cr.bottom - 1),
-      mathRightOfCanvas: mr.left + 1 >= cr.right,
+      mathBelow: mr.top + 1 >= cr.bottom,
+      branded: document.body.innerText.includes("<develo>"),
+      cbabbc: document.body.innerText.includes("CBABBC"),
     };
   });
   check("71 shell has no border", chrome.borderTop === "0px" && chrome.borderRight === "0px" && chrome.borderBottom === "0px" && chrome.borderLeft === "0px", JSON.stringify(chrome));
@@ -583,7 +587,8 @@ async function testCleanUi(browser, base) {
   check("71 KaTeX rendered", chrome.katex);
   check("68 no nano-gpt card text", chrome.nano === false);
   check("71 math does not cover canvas", chrome.overlap === false);
-  check("71 at 1600px math is to the right", chrome.mathRightOfCanvas, JSON.stringify(chrome));
+  check("27 at 1600px math is below the canvas", chrome.mathBelow, JSON.stringify(chrome));
+  check("44 visible branded input is <develo>", chrome.branded && !chrome.cbabbc, JSON.stringify({ branded: chrome.branded, cbabbc: chrome.cbabbc }));
   check("96 clean UI: clean console", errors.length === 0, errors.join(" | "));
   await page.close();
 
@@ -599,6 +604,111 @@ async function testCleanUi(browser, base) {
   });
   check("71 at 1440px math is below the canvas", below);
   await narrow.page.close();
+}
+
+async function testSpeedSlider(browser, base) {
+  const { page, errors } = await openPage(browser);
+  await page.goto(base + "/", { waitUntil: "domcontentloaded", timeout: 60000 });
+  await page.waitForSelector("[data-llm-viz]");
+  await scrollToViz(page);
+  await waitReady(page);
+
+  const initial = await page.evaluate(() => {
+    const range = document.querySelector("[data-llm-speed]");
+    return { min: range.min, max: range.max, step: range.step, value: range.value, disabled: range.disabled };
+  });
+  check("38 speed range is 0–2.5 step 0.1 default 1", initial.min === "0" && initial.max === "2.5" && initial.step === "0.1" && initial.value === "1" && initial.disabled === false, JSON.stringify(initial));
+
+  const after = await page.evaluate(() => {
+    const range = document.querySelector("[data-llm-speed]");
+    range.value = "2.5";
+    range.dispatchEvent(new Event("input", { bubbles: true }));
+    const viz = document.querySelector("[data-llm-viz]").__develoLlmViz;
+    return {
+      label: document.querySelector("[data-llm-speed-value]").textContent,
+      speed: viz.getWalkthrough()?.speed,
+    };
+  });
+  check("38 speed value shows 2.5×", after.label === "2.5×", after.label);
+  check("38 engine speed is 2.5", Math.abs(after.speed - 2.5) < 0.01, JSON.stringify(after));
+  check("96 speed slider: clean console", errors.length === 0, errors.join(" | "));
+  await page.close();
+}
+
+async function testZeroSpeedPause(browser, base) {
+  const { page, errors } = await openPage(browser);
+  await page.goto(base + "/", { waitUntil: "domcontentloaded", timeout: 60000 });
+  await page.waitForSelector("[data-llm-viz]");
+  await scrollToViz(page);
+  await waitReady(page);
+  await page.waitForFunction(() => {
+    const viz = document.querySelector("[data-llm-viz]").__develoLlmViz;
+    return viz.getPlayback() === "playing";
+  }, { timeout: 30000 });
+
+  const before = await page.evaluate(() => {
+    const range = document.querySelector("[data-llm-speed]");
+    range.value = "0";
+    range.dispatchEvent(new Event("input", { bubbles: true }));
+    const viz = document.querySelector("[data-llm-viz]").__develoLlmViz;
+    const cam = viz.getCamera();
+    return {
+      playback: viz.getPlayback(),
+      phase: viz.getStage(),
+      time: viz.getWalkthrough()?.time,
+      camera: JSON.stringify({ c: cam.center, a: cam.angle }),
+    };
+  });
+  check("39 0× enters paused-speed", before.playback === "paused-speed", JSON.stringify(before));
+  await new Promise((r) => setTimeout(r, 600));
+  const held = await page.evaluate(() => {
+    const viz = document.querySelector("[data-llm-viz]").__develoLlmViz;
+    const cam = viz.getCamera();
+    return {
+      playback: viz.getPlayback(),
+      phase: viz.getStage(),
+      time: viz.getWalkthrough()?.time,
+      camera: JSON.stringify({ c: cam.center, a: cam.angle }),
+    };
+  });
+  check("39 0× does not advance time", held.time === before.time, `${before.time} -> ${held.time}`);
+  check("39 0× does not advance phase", held.phase === before.phase, `${before.phase} -> ${held.phase}`);
+  check("39 0× camera stays put", held.camera === before.camera);
+  check("39 playback stays paused-speed", held.playback === "paused-speed", held.playback);
+
+  const resumed = await page.evaluate(() => {
+    const range = document.querySelector("[data-llm-speed]");
+    range.value = "1";
+    range.dispatchEvent(new Event("input", { bubbles: true }));
+    const viz = document.querySelector("[data-llm-viz]").__develoLlmViz;
+    return { playback: viz.getPlayback(), phase: viz.getStage() };
+  });
+  check("39 raising speed resumes playback", resumed.playback === "playing", JSON.stringify(resumed));
+  check("39 resume stays on the same phase", resumed.phase === before.phase, JSON.stringify({ before: before.phase, after: resumed.phase }));
+  check("96 zero speed: clean console", errors.length === 0, errors.join(" | "));
+  await page.close();
+}
+
+async function testWideViewportMathBelow(browser, base) {
+  const { page, errors } = await openPage(browser, { viewport: { width: 1648, height: 920, deviceScaleFactor: 1 } });
+  await page.goto(base + "/", { waitUntil: "domcontentloaded", timeout: 60000 });
+  await page.waitForSelector("[data-llm-viz]");
+  await scrollToViz(page);
+  await waitReady(page);
+  const layout = await page.evaluate(() => {
+    const stage = document.querySelector(".llm-viz-stage").getBoundingClientRect();
+    const math = document.querySelector(".llm-viz-math").getBoundingClientRect();
+    return {
+      mathBelow: math.top + 8 >= stage.bottom,
+      ratio: stage.width / stage.height,
+      stageW: stage.width,
+      stageH: stage.height,
+    };
+  });
+  check("40 at 1648×920 math is below the canvas", layout.mathBelow, JSON.stringify(layout));
+  check("40 canvas aspect is not squeezed", layout.ratio >= 0.85, JSON.stringify(layout));
+  check("96 wide viewport: clean console", errors.length === 0, errors.join(" | "));
+  await page.close();
 }
 
 (async () => {
@@ -634,6 +744,9 @@ async function testCleanUi(browser, base) {
     await testNetworkFailureFallback(browser, base);
     await testIdleRaf(browser, base);
     await testCleanUi(browser, base);
+    await testSpeedSlider(browser, base);
+    await testZeroSpeedPause(browser, base);
+    await testWideViewportMathBelow(browser, base);
   } finally {
     await browser.close();
   }

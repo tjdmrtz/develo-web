@@ -875,9 +875,11 @@ def test_llm_viz_meaning_does_not_depend_on_the_canvas(page):
     assert len(diagram.find_all("li")) >= 5, f"{page}: static diagram needs the pipeline steps"
     rows = diagram.select("li.llm-viz-diagram-tokens")
     assert len(rows) == 2, f"{page}: diagram needs an input and an output row"
-    input_cells = [c.get_text(strip=True) for c in rows[0].select(".llm-viz-cells span")]
+    input_label = rows[0].select_one(".llm-viz-brand-input")
     output_cells = [c.get_text(strip=True) for c in rows[1].select(".llm-viz-cells span")]
-    assert "".join(input_cells) == "CBABBC", f"{page}: input tokens must be the real model input"
+    assert input_label and input_label.get_text(strip=True) == "<develo>", (
+        f"{page}: fallback input must show the branded <develo> label"
+    )
     assert output_cells == ["A", "B", "C"], f"{page}: output row must expose the token vocabulary"
 
     stage = viz.select_one(".llm-viz-stage")
@@ -928,6 +930,38 @@ def test_llm_viz_controls_start_hidden_and_are_buttons(page):
         f"{page}: the unavailable message only shows when the runtime cannot start"
     )
     assert viz.select_one("[data-llm-fallback]"), f"{page}: fallback must exist before the engine is ready"
+
+
+@pytest.mark.parametrize("page", LLM_VIZ_PAGES)
+def test_llm_viz_explore_button_is_360(page):
+    viz = _viz(soup_of(page))
+    btn = viz.select_one("[data-llm-explore]")
+    assert btn.get_text(strip=True) == "360°"
+    expected_aria = (
+        "Explorar el transformer en 360 grados"
+        if page.startswith("/es")
+        else "Explore the transformer in 360 degrees"
+    )
+    assert btn.get("aria-label") == expected_aria
+    html = str(viz)
+    assert "Explore how it works" not in html
+    assert "Explorar cómo funciona" not in html
+
+
+@pytest.mark.parametrize("page", LLM_VIZ_PAGES)
+def test_llm_viz_speed_slider(page):
+    viz = _viz(soup_of(page))
+    slider = viz.select_one("[data-llm-speed]")
+    value = viz.select_one("[data-llm-speed-value]")
+    assert slider is not None and value is not None
+    assert slider.get("min") == "0"
+    assert slider.get("max") == "2.5"
+    assert slider.get("step") == "0.1"
+    assert slider.get("value") == "1"
+    label = viz.select_one(".llm-viz-speed-label")
+    expected = "Velocidad" if page.startswith("/es") else "Speed"
+    assert label and label.get_text(strip=True) == expected
+    assert value.get_text(strip=True) == "1.0×"
 
 
 @pytest.mark.parametrize("page", LLM_VIZ_PAGES)
@@ -1051,6 +1085,15 @@ def test_llm_viz_program_does_not_draw_the_model_card():
     source = (REPO_ROOT / "features" / "llm-visualization" / "upstream" / "src" / "llm" / "Program.ts").read_text(encoding="utf-8")
     assert "drawModelCard(" not in source
     assert "applyDeveloStage" not in source
+
+
+def test_llm_viz_camera_does_not_use_a_fixed_near_plane():
+    camera = (REPO_ROOT / "features" / "llm-visualization" / "upstream" / "src" / "llm" / "Camera.ts").read_text(encoding="utf-8")
+    assert "10000000" not in camera
+    assert "fromPersp(40, state.render.size.x / state.render.size.y, 100," not in camera
+    assert "computeProjectionParams" in camera
+    bundle = (REPO_ROOT / "features" / "llm-visualization" / "runtime" / "engine.js").read_text(encoding="utf-8")
+    assert "10000000" not in bundle
 
 
 def test_llm_viz_asset_urls_are_pinned_to_the_upstream_commit():

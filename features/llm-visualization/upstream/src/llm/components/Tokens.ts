@@ -8,6 +8,15 @@ import { IRenderState } from "../render/modelRender";
 import { DimStyle, dimStyleColor } from "../walkthrough/WalkthroughTools";
 import { IDisplayState } from "../Program";
 
+export const DEVELO_VISIBLE_INPUT_LABELS = [
+    "<d",
+    "e",
+    "v",
+    "e",
+    "l",
+    "o>",
+] as const;
+
 export function drawTokens(renderState: IRenderState, layout: IGptModelLayout, display: IDisplayState, data?: Float32Array, count?: number) {
     let { modelFontBuf: fontBuf, lineRender } = renderState;
 
@@ -37,7 +46,10 @@ export function drawTokens(renderState: IRenderState, layout: IGptModelLayout, d
         if (i >= count) {
             break;
         }
-        let str = tokenIndexToString(a);
+        let str =
+            i < DEVELO_VISIBLE_INPUT_LABELS.length
+                ? DEVELO_VISIBLE_INPUT_LABELS[i]
+                : tokenIndexToString(a);
         let w = measureTextWidth(fontBuf, str, upperFontSize);
         let w2 = measureTextWidth(fontBuf, '' + a, lowerFontSize);
         strParts.push({ str, val: a, w, offset: strOffset, w2, idxOffset, i });

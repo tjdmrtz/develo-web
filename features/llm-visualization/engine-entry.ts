@@ -22,4 +22,10 @@ export { constructModel, createGpuModelForWasm, stepWasmModel, syncWasmDataWithJ
 export { initModel, setModelInputData } from "./upstream/src/llm/GptModel";
 export { TensorF32 } from "./upstream/src/utils/tensor";
 export { Vec3, Vec4 } from "./upstream/src/utils/vector";
-export { cameraToMatrixView, updateCamera } from "./upstream/src/llm/Camera";
+export {
+    cameraToMatrixView,
+    updateCamera,
+    computeProjectionParams,
+    BASE_VERTICAL_FOV_DEG,
+    REFERENCE_CAMERA_ASPECT,
+} from "./upstream/src/llm/Camera";

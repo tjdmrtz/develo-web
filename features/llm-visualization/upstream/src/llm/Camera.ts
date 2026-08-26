@@ -43,6 +43,45 @@ export interface ICameraPos {
     angle: Vec3;
 }
 
+export interface IProjectionParams {
+    fovDeg: number;
+    aspect: number;
+    near: number;
+    far: number;
+    dist: number;
+}
+
+export const BASE_VERTICAL_FOV_DEG = 40;
+export const REFERENCE_CAMERA_ASPECT = 1.6;
+export const MIN_NEAR_PLANE = 0.1;
+export const FAR_PLANE_FLOOR = 100000;
+
+export function computeProjectionParams(
+    cameraZoom: number,
+    width: number,
+    height: number,
+    localDist: number,
+): IProjectionParams {
+    const safeWidth = Math.max(1, width);
+    const safeHeight = Math.max(1, height);
+    const aspect = safeWidth / safeHeight;
+    const dist = Math.max(0.001, 200 * cameraZoom);
+    const near = Math.max(MIN_NEAR_PLANE, dist / 100);
+    const far = localDist + Math.max(dist * 2, FAR_PLANE_FLOOR);
+
+    const baseHalfFovRad = BASE_VERTICAL_FOV_DEG * Math.PI / 360;
+    let fovDeg = BASE_VERTICAL_FOV_DEG;
+    if (aspect < REFERENCE_CAMERA_ASPECT) {
+        const adjustedHalfFov = Math.atan(
+            Math.tan(baseHalfFovRad) * REFERENCE_CAMERA_ASPECT / aspect,
+        );
+        fovDeg = adjustedHalfFov * 360 / Math.PI;
+    }
+    fovDeg = Math.min(90, Math.max(BASE_VERTICAL_FOV_DEG, fovDeg));
+
+    return { fovDeg, aspect, near, far, dist };
+}
+
 
 export function cameraToMatrixView(camera: ICamera) {
     while (camera.angle.x < 0) camera.angle.x += 360;
@@ -79,10 +118,18 @@ export function genModelViewMatrices(state: IProgramState, layout: IModelLayout,
     let localDist = bb.size().len();
 
     let { lookAt, camPos } = cameraToMatrixView(camera);
-    let dist = 200 * camera.angle.z;
-
-    // let persp = Mat4f.fromPersp(40, state.render.size.x / state.render.size.y, dist / 100, localDist + Math.max(dist * 2, 100000));
-    let persp = Mat4f.fromPersp(40, state.render.size.x / state.render.size.y, 100, 10000000);
+    const projection = computeProjectionParams(
+        camera.angle.z,
+        state.render.size.x,
+        state.render.size.y,
+        localDist,
+    );
+    const persp = Mat4f.fromPersp(
+        projection.fovDeg,
+        projection.aspect,
+        projection.near,
+        projection.far,
+    );
     let viewMtx = persp.mul(lookAt);
     let modelMtx = new Mat4f();
     modelMtx[0] = 1.0;

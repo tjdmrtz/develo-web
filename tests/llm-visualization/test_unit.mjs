@@ -84,13 +84,18 @@ test("capabilities without document", async () => {
 });
 
 test("token mapping", async () => {
-  const { tokenToLetter, tokensToSequence, INITIAL_TOKENS, INITIAL_SEQUENCE, TARGET_SEQUENCE } = await load("tokens.js");
+  const {
+    tokenToLetter, tokensToSequence, INITIAL_TOKENS, INITIAL_SEQUENCE, TARGET_SEQUENCE,
+    DISPLAY_INPUT_SEGMENTS, DISPLAY_INPUT_SEQUENCE,
+  } = await load("tokens.js");
   assert.equal(tokenToLetter(0), "A");
   assert.equal(tokenToLetter(1), "B");
   assert.equal(tokenToLetter(2), "C");
   assert.equal(tokensToSequence(INITIAL_TOKENS), INITIAL_SEQUENCE);
   assert.equal(INITIAL_SEQUENCE, "CBABBC");
   assert.equal(TARGET_SEQUENCE, "ABBBCC");
+  assert.deepEqual(DISPLAY_INPUT_SEGMENTS, ["<d", "e", "v", "e", "l", "o>"]);
+  assert.equal(DISPLAY_INPUT_SEQUENCE, "<develo>");
 });
 
 test("probabilities from buffer", async () => {
@@ -171,4 +176,25 @@ test("wasm streaming fallback", async () => {
   assert.equal(usedFallback, true);
   globalThis.fetch = origFetch;
   globalThis.WebAssembly = origWA;
+});
+
+test("close walkthrough cameras never intersect the near plane", async () => {
+  const engine = await load("engine.js");
+  const close = engine.computeProjectionParams(0.4, 700, 700, 2000);
+  assert.equal(close.dist, 80);
+  assert.equal(close.near, 0.8);
+  assert.ok(close.near < close.dist);
+  const intro = engine.computeProjectionParams(0.519, 700, 700, 2000);
+  assert.ok(intro.near < 2);
+  assert.ok(intro.near < intro.dist);
+});
+
+test("projection widens on narrow embedded canvases", async () => {
+  const engine = await load("engine.js");
+  const wide = engine.computeProjectionParams(1, 1600, 900, 2000);
+  assert.equal(wide.fovDeg, 40);
+  const square = engine.computeProjectionParams(1, 700, 700, 2000);
+  assert.ok(square.fovDeg > 40);
+  assert.ok(square.fovDeg <= 90);
+  assert.ok(square.far > square.dist);
 });

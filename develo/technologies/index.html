@@ -98,13 +98,13 @@
       </div>
       <div class="llm-viz-shell">
         <div class="llm-viz-experience">
-          <div class="llm-viz-stage" role="region" aria-label="Interactive visualization of a small three-layer GPT-style transformer processing and sorting A, B and C tokens through embeddings, self-attention, transformer layers and next-token probabilities.">
+          <div class="llm-viz-stage" role="region" aria-label="Interactive visualization of a small three-layer GPT-style transformer showing embeddings, normalization, self-attention, projection, feed-forward transformations and output probabilities.">
             <div class="llm-viz-fallback" data-llm-fallback>
               <p class="llm-viz-fallback-msg" data-llm-fallback-msg hidden>Interactive model visualization is unavailable in this browser. The transformer flow is shown in a simplified static view.</p>
               <ol class="llm-viz-diagram" aria-label="Simplified transformer flow">
                 <li class="llm-viz-diagram-tokens">
                   <span class="llm-viz-diagram-label">Input tokens</span>
-                  <span class="llm-viz-cells"><span>C</span><span>B</span><span>A</span><span>B</span><span>B</span><span>C</span></span>
+                  <span class="llm-viz-cells"><span class="llm-viz-brand-input">&lt;develo&gt;</span></span>
                 </li>
                 <li>Embedding</li><li>Attention × 3 heads</li><li>Transformer × 3</li>
                 <li class="llm-viz-diagram-tokens">
@@ -122,8 +122,13 @@
         </div>
         <div class="llm-viz-controls">
           <ol class="llm-viz-progress" aria-hidden="true"><li data-llm-progress-item>Input</li><li data-llm-progress-item>Embedding</li><li data-llm-progress-item>Layer Norm</li><li data-llm-progress-item>Self-Attention</li><li data-llm-progress-item>Projection</li><li data-llm-progress-item>MLP</li><li data-llm-progress-item>Transformer</li><li data-llm-progress-item>Softmax</li><li data-llm-progress-item>Output</li></ol>
+          <label class="llm-viz-speed">
+            <span class="llm-viz-speed-label">Speed</span>
+            <input type="range" min="0" max="2.5" step="0.1" value="1" data-llm-speed aria-label="Animation speed" disabled>
+            <output class="llm-viz-speed-value" data-llm-speed-value>1.0×</output>
+          </label>
           <div class="llm-viz-buttons">
-            <button type="button" class="btn btn-small" data-llm-explore hidden>Explore how it works</button>
+            <button type="button" class="btn btn-small" data-llm-explore aria-label="Explore the transformer in 360 degrees" title="Explore the transformer in 360 degrees" hidden>360°</button>
             <button type="button" class="btn btn-small" data-llm-reset hidden>Reset</button>
             <button type="button" class="btn btn-small" data-llm-replay hidden>Replay</button>
           </div>
