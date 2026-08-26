@@ -455,6 +455,7 @@ SPANISH_PAGES = [
             {"t": "p", "html": "Combinamos <strong>Retrieval-Augmented Generation (RAG)</strong>, embeddings, bases vectoriales, reranking y fuentes visibles para responder con conocimiento dinámico y verificable."},
             {"t": "h2", "text": "Fine-tuning de LLMs"},
             {"t": "p", "html": "Aplicamos <strong>fine-tuning de LLMs</strong> solo cuando una evaluación demuestra que supera a instrucciones, ejemplos o RAG para el comportamiento requerido."},
+            {"t": "llm-viz", "variant": "tech"},
             {"t": "h2", "text": "Evaluación y observabilidad"},
             {"t": "p", "html": "Registramos trazas, calidad, seguridad, latencia, costo y uso. Las evaluaciones automáticas y humanas convierten el desempeño de IA en una métrica operable."},
             {"t": "h2", "text": "Dónde aplicamos esta arquitectura"},

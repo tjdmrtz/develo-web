@@ -841,6 +841,220 @@ def test_all_pages_load_the_year_element():
 
 
 # ---------------------------------------------------------------------------
+# LLM visualization section
+# ---------------------------------------------------------------------------
+
+LLM_VIZ_PAGES = ["/", "/es/", "/technologies/", "/es/technologies/"]
+LLM_VIZ_ASSET_DIR = SITE_ROOT / "llm-viz" / "bycroft-9da9374"
+
+
+def _viz(soup: BeautifulSoup):
+    nodes = soup.select("[data-llm-viz]")
+    assert len(nodes) == 1, f"expected exactly one visualization, got {len(nodes)}"
+    return nodes[0]
+
+
+@pytest.mark.parametrize("page", LLM_VIZ_PAGES)
+def test_llm_viz_section_is_present_once(page):
+    viz = _viz(soup_of(page))
+    expected_lang = "es" if page.startswith("/es") else "en"
+    assert viz["data-lang"] == expected_lang
+    assert viz["data-variant"] == ("home" if page in ("/", "/es/") else "tech")
+
+
+@pytest.mark.parametrize("page", LLM_VIZ_PAGES)
+def test_llm_viz_meaning_does_not_depend_on_the_canvas(page):
+    """The canvas is decorative: the story must be crawlable HTML."""
+    viz = _viz(soup_of(page))
+    canvas = viz.select_one("canvas[data-llm-canvas]")
+    assert canvas and canvas.get("aria-hidden") == "true"
+    assert not canvas.get_text(strip=True)
+
+    diagram = viz.select_one(".llm-viz-diagram")
+    assert diagram and diagram.get("aria-label")
+    assert len(diagram.find_all("li")) >= 5, f"{page}: static diagram needs the pipeline steps"
+    rows = diagram.select("li.llm-viz-diagram-tokens")
+    assert len(rows) == 2, f"{page}: diagram needs an input and an output row"
+    input_cells = [c.get_text(strip=True) for c in rows[0].select(".llm-viz-cells span")]
+    output_cells = [c.get_text(strip=True) for c in rows[1].select(".llm-viz-cells span")]
+    assert "".join(input_cells) == "CBABBC", f"{page}: input tokens must be the real model input"
+    assert output_cells == ["A", "B", "C"], f"{page}: output row must expose the token vocabulary"
+
+    stage = viz.select_one(".llm-viz-stage")
+    assert stage and stage.get("role") == "region" and stage.get("aria-label")
+
+
+@pytest.mark.parametrize("page", LLM_VIZ_PAGES)
+def test_llm_viz_headings_and_disclaimer(page):
+    soup = soup_of(page)
+    viz = _viz(soup)
+    heading = viz.find("h2")
+    assert heading and heading.get_text(strip=True)
+    assert len(soup.select("main h1")) == 1, f"{page}: heading hierarchy must stay valid"
+
+    disclaimer = viz.select_one(".llm-viz-disclaimer")
+    assert disclaimer, f"{page}: the tiny-model disclaimer is mandatory"
+    text = disclaimer.get_text(" ", strip=True).lower()
+    if page.startswith("/es"):
+        assert "pequeño" in text and "producción" in text
+    else:
+        assert "tiny" in text and "production" in text
+
+
+@pytest.mark.parametrize("page", LLM_VIZ_PAGES)
+def test_llm_viz_controls_start_hidden_and_are_buttons(page):
+    viz = _viz(soup_of(page))
+    for attr in ("data-llm-explore", "data-llm-reset", "data-llm-replay"):
+        btn = viz.select_one(f"[{attr}]")
+        assert btn is not None, f"{page}: missing {attr}"
+        assert btn.name == "button", f"{page}: {attr} must be a real button (keyboard accessible)"
+        assert btn.get("type") == "button"
+        assert btn.has_attr("hidden"), f"{page}: {attr} must not appear before the runtime is ready"
+
+    msg = viz.select_one("[data-llm-fallback-msg]")
+    assert msg is not None and msg.has_attr("hidden"), (
+        f"{page}: the unavailable message only shows when the runtime cannot start"
+    )
+    assert viz.select_one("[data-llm-fallback]"), f"{page}: fallback must exist before the engine is ready"
+
+
+@pytest.mark.parametrize("page", LLM_VIZ_PAGES)
+def test_llm_viz_cta_points_to_the_localized_technology_page(page):
+    viz = _viz(soup_of(page))
+    cta = viz.select_one(".llm-tech-copy a.btn")
+    assert cta, f"{page}: missing technology CTA"
+    assert cta["href"] == ("/es/technologies/" if page.startswith("/es") else "/technologies/")
+
+
+@pytest.mark.parametrize("page", LLM_VIZ_PAGES)
+def test_llm_viz_script_is_a_deferred_module(page):
+    soup = soup_of(page)
+    script = soup.find("script", src="/js/llm-visualization/index.js")
+    assert script, f"{page}: missing visualization entry point"
+    assert script.get("type") == "module", f"{page}: must not block parsing"
+
+
+@pytest.mark.parametrize("page", [p for p in EXPECTED_PAGES if p not in LLM_VIZ_PAGES])
+def test_llm_viz_is_not_loaded_on_other_pages(page):
+    soup = soup_of(page)
+    assert not soup.select("[data-llm-viz]"), f"{page}: visualization must not appear here"
+    assert not soup.find("script", src="/js/llm-visualization/index.js"), (
+        f"{page}: pages without the section must not download the runtime"
+    )
+
+
+def _main_headings_with_viz(page: str):
+    """Ordered list of the main-content headings, with the visualization inlined."""
+    soup = soup_of(page)
+    main = soup.find("main")
+    nodes = main.select("h2, h3, [data-llm-viz]")
+    out = []
+    for node in nodes:
+        if node.has_attr("data-llm-viz"):
+            out.append("<viz>")
+        elif not node.find_parent(attrs={"data-llm-viz": True}):
+            out.append(node.get_text(" ", strip=True))
+    return out
+
+
+def test_llm_viz_home_sits_between_what_we_do_and_our_method():
+    for page, before, after in [
+        ("/", "What we do", "Our method"),
+        ("/es/", "Qué hacemos", "Nuestro método"),
+    ]:
+        headings = _main_headings_with_viz(page)
+        viz_at = headings.index("<viz>")
+        before_at = next(i for i, h in enumerate(headings) if h.startswith(before))
+        after_at = next(i for i, h in enumerate(headings) if h.startswith(after))
+        assert before_at < viz_at < after_at, (
+            f"{page}: expected {before!r} < visualization < {after!r}, got {headings}"
+        )
+        # The old standalone technology section must not survive as a duplicate.
+        heading = "La tecnología detrás de Develo" if page.startswith("/es") else "The technology behind Develo"
+        assert str(soup_of(page)).count(heading) == 0, (
+            f"{page}: {heading!r} was replaced by the visualization section"
+        )
+
+
+def test_llm_viz_technology_pages_sit_after_fine_tuning():
+    for page, before, after in [
+        ("/technologies/", "LLMs, RAG and fine-tuning", "Data"),
+        ("/es/technologies/", "Fine-tuning de LLMs", "Evaluación y observabilidad"),
+    ]:
+        headings = _main_headings_with_viz(page)
+        viz_at = headings.index("<viz>")
+        before_at = next(i for i, h in enumerate(headings) if h.startswith(before))
+        after_at = next(i for i, h in enumerate(headings) if h.startswith(after))
+        assert before_at < viz_at < after_at, (
+            f"{page}: expected {before!r} < visualization < {after!r}, got {headings}"
+        )
+
+
+def test_llm_viz_runtime_assets_are_served_from_our_own_origin():
+    for name in ("gpt-nano-sort-model.json", "gpt-nano-sort-t0-partials.json",
+                 "native.wasm", "fonts/font-atlas.png", "fonts/font-def.json"):
+        asset = LLM_VIZ_ASSET_DIR / name
+        assert asset.is_file(), f"missing runtime asset {name}"
+        assert asset.stat().st_size > 0, f"empty runtime asset {name}"
+
+    runtime = SITE_ROOT / "js" / "llm-visualization"
+    assert (runtime / "index.js").is_file()
+    for module in runtime.glob("*.js"):
+        source = module.read_text(encoding="utf-8")
+        assert "http://" not in source and "https://" not in source.replace("https://develo.software", ""), (
+            f"{module.name}: runtime must not fetch from third-party origins"
+        )
+
+
+def test_llm_viz_never_calls_upstream_origins_in_production():
+    forbidden = ("bbycroft.net", "github.com", "raw.githubusercontent.com", "unpkg.com", "cdn.jsdelivr.net")
+    targets = list((SITE_ROOT / "js" / "llm-visualization").glob("*.js"))
+    targets += [SITE_ROOT / p.lstrip("/") / "index.html" for p in LLM_VIZ_PAGES]
+    for target in targets:
+        source = target.read_text(encoding="utf-8")
+        for host in forbidden:
+            assert host not in source, f"{target.name} must not reference {host}"
+
+
+def test_llm_viz_states_the_real_model_shape():
+    for page, expected in [
+        ("/", ["3 layers", "3 attention heads", "48-dimensional"]),
+        ("/es/", ["3 capas", "3 cabezas de atención", "48 dimensiones"]),
+    ]:
+        dims = _viz(soup_of(page)).select_one(".llm-viz-dims").get_text(" ", strip=True)
+        for fragment in expected:
+            assert fragment in dims, f"{page}: model dimensions must state {fragment!r}, got {dims!r}"
+
+
+def test_llm_viz_asset_urls_are_pinned_to_the_upstream_commit():
+    assets = (SITE_ROOT / "js" / "llm-visualization" / "assets.js").read_text(encoding="utf-8")
+    assert "/llm-viz/bycroft-9da9374" in assets, "asset URLs must stay pinned to the upstream commit"
+
+
+def test_llm_viz_third_party_notice_credits_upstream():
+    notices = (REPO_ROOT / "THIRD_PARTY_NOTICES.md").read_text(encoding="utf-8")
+    assert "bbycroft" in notices or "Bycroft" in notices, "upstream author must be credited"
+    assert "9da93742382f1bf36c020c38a1ace454e82c4490" in notices, "pinned commit must be documented"
+    assert "MIT" in notices
+
+
+def test_llm_viz_deploy_sets_wasm_mime_and_immutable_cache():
+    deploy = (REPO_ROOT / "deploy.sh").read_text(encoding="utf-8")
+    assert "application/wasm" in deploy, "WASM needs an explicit MIME for instantiateStreaming"
+    assert "public, max-age=31536000, immutable" in deploy, "versioned assets must be cached immutably"
+
+
+def test_llm_viz_unit_tests_pass_under_node():
+    node = shutil.which("node")
+    assert node, "node not installed"
+    result = subprocess.run(
+        [node, "--test", str(REPO_ROOT / "tests" / "llm-visualization" / "test_unit.mjs")],
+        capture_output=True, text=True, timeout=120,
+    )
+    assert result.returncode == 0, f"unit tests failed:\n{result.stdout}\n{result.stderr}"
+
+
+# ---------------------------------------------------------------------------
 # Visual smoke tests (headless Chrome screenshots)
 # ---------------------------------------------------------------------------
 
@@ -878,3 +1092,25 @@ def test_browser_interactions(live_server):
         timeout=120, capture_output=True, text=True,
     )
     assert result.returncode == 0, f"browser interaction test failed:\n{result.stdout}\n{result.stderr}"
+
+
+@pytest.mark.screenshot
+def test_llm_viz_page_scroll_is_never_hijacked(live_server):
+    """Release blocker: the wheel over the canvas must always scroll the page."""
+    assert NODE, "node not installed"
+    result = subprocess.run(
+        [NODE, str(REPO_ROOT / "tests" / "llm-visualization" / "e2e_scroll.js"), live_server],
+        cwd=str(REPO_ROOT / "tests"), timeout=180, capture_output=True, text=True,
+    )
+    assert result.returncode == 0, f"scroll blocker failed:\n{result.stdout}\n{result.stderr}"
+
+
+@pytest.mark.screenshot
+def test_llm_viz_end_to_end(live_server):
+    """Position, lazy loading, autoplay, explore/reset/replay and fallbacks."""
+    assert NODE, "node not installed"
+    result = subprocess.run(
+        [NODE, str(REPO_ROOT / "tests" / "llm-visualization" / "e2e_viz.js"), live_server],
+        cwd=str(REPO_ROOT / "tests"), timeout=600, capture_output=True, text=True,
+    )
+    assert result.returncode == 0, f"visualization e2e failed:\n{result.stdout}\n{result.stderr}"

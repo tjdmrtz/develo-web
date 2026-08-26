@@ -89,6 +89,56 @@
       <div class="content">
 <section class="content-block" data-reveal><h2>Qué hacemos</h2></section>
 <section class="content-block" data-reveal><div class="grid cols-3"><a class="card" href="/es/solutions/custom-software-development/"><h3>Desarrollo de Software a Medida</h3><p>Plataformas, productos SaaS, dashboards y herramientas digitales diseñadas desde cero para su negocio.</p><span class="card-more">Ver más →</span></a><a class="card" href="/es/solutions/artificial-intelligence/"><h3>Inteligencia Artificial</h3><p>IA aplicada: aplicaciones LLM, sistemas RAG, modelos fine-tuned y automatización inteligente sobre Amazon Bedrock.</p><span class="card-more">Ver más →</span></a><a class="card" href="/es/solutions/ai-agents/"><h3>Agentes de IA</h3><p>Agentes autónomos que se conectan a sus sistemas, responden a clientes y ejecutan flujos con supervisión humana.</p><span class="card-more">Ver más →</span></a></div></section>
+<section class="content-block" data-reveal>
+    <div class="llm-tech" data-llm-viz data-lang="es" data-variant="home">
+      <div class="llm-tech-copy">
+        <p class="llm-tech-eyebrow">LA TECNOLOGÍA DETRÁS DE DEVELO</p>
+        <h2 id="llm-tech-title">Sistemas de IA que podés entender, controlar y llevar a producción.</h2>
+        <p>Desde tokens y atención hasta agentes, recuperación de conocimiento y acciones de negocio, diseñamos las capas que convierten la IA moderna en software confiable.</p>
+        <p class="llm-tech-stack">AWS · Amazon Bedrock · LLMs · RAG · Agentes de IA · MCP</p>
+
+        <a class="btn btn-small" href="/es/technologies/">Ver nuestra tecnología</a>
+      </div>
+      <div class="llm-viz-shell">
+        <div class="llm-viz-meta">
+          <p class="llm-viz-caption">VISUALIZACIÓN EN VIVO DE UN TRANSFORMER</p>
+          <p class="llm-viz-dims">3 capas · 3 cabezas de atención · embeddings de 48 dimensiones</p>
+        </div>
+        <div class="llm-viz-stage" role="region" aria-label="Visualización interactiva de un pequeño transformer de estilo GPT de tres capas que procesa y ordena tokens A, B y C mediante embeddings, self-attention, capas transformer y probabilidades del próximo token.">
+          <div class="llm-viz-fallback" data-llm-fallback>
+            <p class="llm-viz-fallback-msg" data-llm-fallback-msg hidden>La visualización interactiva del modelo no está disponible en este navegador. El flujo del transformer se muestra en una vista estática simplificada.</p>
+            <ol class="llm-viz-diagram" aria-label="Flujo simplificado del transformer">
+              <li class="llm-viz-diagram-tokens">
+                <span class="llm-viz-diagram-label">Tokens de entrada</span>
+                <span class="llm-viz-cells"><span>C</span><span>B</span><span>A</span><span>B</span><span>B</span><span>C</span></span>
+              </li>
+              <li>Embedding</li><li>Atención × 3 cabezas</li><li>Transformer × 3</li>
+              <li class="llm-viz-diagram-tokens">
+                <span class="llm-viz-diagram-label">Probabilidades A / B / C</span>
+                <span class="llm-viz-cells"><span>A</span><span>B</span><span>C</span></span>
+              </li>
+            </ol>
+          </div>
+          <canvas data-llm-canvas aria-hidden="true"></canvas>
+          <div class="llm-viz-overlay">
+            <p class="llm-viz-stage-title" data-llm-stage-title>Vista general del modelo</p>
+            <p class="llm-viz-stage-desc" data-llm-stage-desc>Un pequeño modelo real de estilo GPT ordenando tokens A/B/C.</p>
+            <p class="llm-viz-probs" data-llm-probs></p>
+            <p class="llm-viz-hint" data-llm-hint hidden></p>
+          </div>
+        </div>
+        <div class="llm-viz-controls">
+          <ol class="llm-viz-progress" aria-hidden="true"><li data-llm-progress-item>Tokens</li><li data-llm-progress-item>Embeddings</li><li data-llm-progress-item>Q/K/V</li><li data-llm-progress-item>Attention</li><li data-llm-progress-item>Capas</li><li data-llm-progress-item>Output</li><li data-llm-progress-item>Predicción</li></ol>
+          <div class="llm-viz-buttons">
+            <button type="button" class="btn btn-small" data-llm-explore hidden>Explorar cómo funciona</button>
+            <button type="button" class="btn btn-small" data-llm-reset hidden>Restablecer</button>
+            <button type="button" class="btn btn-small" data-llm-replay hidden>Repetir</button>
+          </div>
+        </div>
+        <p class="llm-viz-disclaimer">Un pequeño modelo real de estilo GPT ordenando tokens A/B/C. El modelo es intencionalmente pequeño para poder explorar visualmente su cómputo interno; los LLMs de producción operan a una escala muchísimo mayor.</p>
+      </div>
+    </div>
+</section>
 <section class="content-block" data-reveal><h2>Nuestro método: del conocimiento al impacto</h2></section>
 <section class="content-block" data-reveal><div class="grid cols-4"><div class="card"><h3>Exploración de la Necesidad</h3><p>Comenzamos analizando los insights del cliente para definir el alcance de la solución.</p></div><div class="card"><h3>Diseño de PoC</h3><p>Creamos e implementamos una prueba de concepto para mostrar el enfoque y la funcionalidad.</p></div><div class="card"><h3>Desarrollo de MVP</h3><p>Desarrollamos un producto que aporta valor comercial y luego lo iteramos para perfeccionarlo.</p></div><div class="card"><h3>Mantenimiento</h3><p>Soporte a largo plazo para garantizar resultados sostenibles y un producto actualizado.</p></div></div></section>
 <section class="content-block" data-reveal><h2>Producto destacado: d-ialog</h2></section>
@@ -96,9 +146,6 @@
 <section class="content-block" data-reveal><div class="grid cols-2"><a class="card card-link" href="/es/solutions/d-ialog/"><h3>Conocer d-ialog</h3><p>Conversaciones de IA que generan resultados</p><span class="card-more">Ir a la página →</span></a><a class="card card-link" href="/es/solutions/develomultiagent/"><h3>Develo Multi-Agent</h3><p>Orquestación de equipos de agentes de IA especializados</p><span class="card-more">Ir a la página →</span></a></div></section>
 <section class="content-block" data-reveal><h2>Soluciones por problema de negocio</h2></section>
 <section class="content-block" data-reveal><div class="grid cols-3"><a class="card" href="/es/solutions/customer-service-automation/"><h3>Automatización de Atención al Cliente</h3><p>Automatice el soporte en todos los canales con IA que conoce sus datos.</p><span class="card-more">Ver más →</span></a><a class="card" href="/es/solutions/ai-for-whatsapp/"><h3>IA para WhatsApp</h3><p>Agentes de IA para atención al cliente en WhatsApp con escalado a humanos.</p><span class="card-more">Ver más →</span></a><a class="card" href="/es/solutions/marketplace-automation/"><h3>Automatización de Marketplaces</h3><p>Automatice preguntas, pedidos y operaciones en marketplaces.</p><span class="card-more">Ver más →</span></a><a class="card" href="/es/solutions/ai-for-mercado-libre/"><h3>IA para Mercado Libre</h3><p>Automatice preguntas de compradores e información de productos.</p><span class="card-more">Ver más →</span></a><a class="card" href="/es/solutions/api-integrations/"><h3>Integraciones API y Sistemas</h3><p>Conecte CRM, ERP, ecommerce, marketplaces y sistemas internos.</p><span class="card-more">Ver más →</span></a><a class="card" href="/es/solutions/"><h3>Todas las Soluciones</h3><p>Explore el mapa completo de lo que Develo construye.</p><span class="card-more">Ver más →</span></a></div></section>
-<section class="content-block" data-reveal><h2>La tecnología detrás de Develo</h2></section>
-<section class="content-block" data-reveal><p>Ingenierizamos en <strong>AWS</strong>, ejecutamos modelos de lenguaje a través de <strong>Amazon Bedrock</strong>, construimos <strong>agentes de IA autónomos</strong> con acceso a herramientas vía el <strong>Model Context Protocol (MCP)</strong> y aplicamos <strong>RAG y fine-tuning de LLMs</strong> donde mejoran mediblemente la calidad.</p></section>
-<section class="content-block" data-reveal><div class="grid cols-1"><a class="card card-link" href="/es/technologies/"><h3>Nuestra Pila Tecnológica</h3><p>AWS, Bedrock, agentes de IA, MCP y fine-tuning</p><span class="card-more">Ir a la página →</span></a></div></section>
 <section class="content-block" data-reveal><h2>Resultados, no promesas</h2></section>
 <section class="content-block" data-reveal><p>Mostramos el trabajo. Cómo ayudamos a Tecnoland y Distriland a reinventar su experiencia de cliente digital.</p></section>
 <section class="content-block" data-reveal><div class="grid cols-2"><a class="card card-link" href="/es/case-studies/tecnoland-distriland/"><h3>Caso de Estudio: Tecnoland <span class="amp">&amp;</span> Distriland</h3><p>Experiencia de cliente digital para servicios tech y ecommerce</p><span class="card-more">Ir a la página →</span></a><a class="card card-link" href="/es/case-studies/"><h3>Todos los Casos de Estudio</h3><p>Proyectos reales, resultados medibles</p><span class="card-more">Ir a la página →</span></a></div></section>
@@ -152,5 +199,6 @@
     </footer>
 
   <script src="/js/main.js"></script>
+  <script type="module" src="/js/llm-visualization/index.js"></script>
 </body>
 </html>

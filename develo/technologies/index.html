@@ -86,6 +86,56 @@
 <section class="content-block" data-reveal><p>We adopt the <strong>Model Context Protocol (MCP)</strong>, the open standard for connecting LLMs and AI agents to tools and data. With MCP servers, your CRM, order system or internal API becomes a governed, versioned tool that any model or agent can use — with scoped permissions, audit logs and no custom glue code per model. MCP is how we keep agent capabilities interoperable and auditable as the ecosystem evolves.</p></section>
 <section class="content-block" data-reveal><h2>LLMs, RAG and fine-tuning</h2></section>
 <section class="content-block" data-reveal><p>We treat model choice as an engineering decision, not a religious one. Most products combine: strong base prompts, <strong>Retrieval-Augmented Generation (RAG)</strong> over your documents and operational data (vector search, hybrid retrieval, reranking, citations), and — where prompting and retrieval plateau — <strong>LLM fine-tuning</strong> for domain tone, format and task accuracy. Every choice is validated with evaluation suites on real business cases.</p></section>
+<section class="content-block" data-reveal>
+    <div class="llm-tech" data-llm-viz data-lang="en" data-variant="tech">
+      <div class="llm-tech-copy">
+        <p class="llm-tech-eyebrow">THE TECHNOLOGY BEHIND DEVELO</p>
+        <h2 id="llm-tech-title">AI systems you can understand, control and put into production.</h2>
+        <p>From tokens and attention to agents, retrieval and business actions, we engineer the layers that turn modern AI into reliable software.</p>
+        <p class="llm-tech-stack">AWS · Amazon Bedrock · LLMs · RAG · AI Agents · MCP</p>
+        <ul class="llm-tech-explain"><li><strong>Tokens</strong> Discrete inputs enter the model.</li><li><strong>Embeddings</strong> Tokens become learned vectors plus positional information.</li><li><strong>Self-attention</strong> Each position weights relevant earlier context through Query, Key and Value.</li><li><strong>Transformer layers</strong> Attention and feed-forward transformations repeat through residual paths.</li><li><strong>Prediction</strong> The final representation becomes probabilities for the next token.</li></ul>
+        <a class="btn btn-small" href="/technologies/">View our technology stack</a>
+      </div>
+      <div class="llm-viz-shell">
+        <div class="llm-viz-meta">
+          <p class="llm-viz-caption">LIVE TRANSFORMER VISUALIZATION</p>
+          <p class="llm-viz-dims">3 layers · 3 attention heads · 48-dimensional embeddings</p>
+        </div>
+        <div class="llm-viz-stage" role="region" aria-label="Interactive visualization of a small three-layer GPT-style transformer processing and sorting A, B and C tokens through embeddings, self-attention, transformer layers and next-token probabilities.">
+          <div class="llm-viz-fallback" data-llm-fallback>
+            <p class="llm-viz-fallback-msg" data-llm-fallback-msg hidden>Interactive model visualization is unavailable in this browser. The transformer flow is shown in a simplified static view.</p>
+            <ol class="llm-viz-diagram" aria-label="Simplified transformer flow">
+              <li class="llm-viz-diagram-tokens">
+                <span class="llm-viz-diagram-label">Input tokens</span>
+                <span class="llm-viz-cells"><span>C</span><span>B</span><span>A</span><span>B</span><span>B</span><span>C</span></span>
+              </li>
+              <li>Embedding</li><li>Attention × 3 heads</li><li>Transformer × 3</li>
+              <li class="llm-viz-diagram-tokens">
+                <span class="llm-viz-diagram-label">A / B / C probabilities</span>
+                <span class="llm-viz-cells"><span>A</span><span>B</span><span>C</span></span>
+              </li>
+            </ol>
+          </div>
+          <canvas data-llm-canvas aria-hidden="true"></canvas>
+          <div class="llm-viz-overlay">
+            <p class="llm-viz-stage-title" data-llm-stage-title>Model overview</p>
+            <p class="llm-viz-stage-desc" data-llm-stage-desc>A real tiny GPT-style model sorting A/B/C tokens.</p>
+            <p class="llm-viz-probs" data-llm-probs></p>
+            <p class="llm-viz-hint" data-llm-hint hidden></p>
+          </div>
+        </div>
+        <div class="llm-viz-controls">
+          <ol class="llm-viz-progress" aria-hidden="true"><li data-llm-progress-item>Tokens</li><li data-llm-progress-item>Embeddings</li><li data-llm-progress-item>Q/K/V</li><li data-llm-progress-item>Attention</li><li data-llm-progress-item>Layers</li><li data-llm-progress-item>Output</li><li data-llm-progress-item>Prediction</li></ol>
+          <div class="llm-viz-buttons">
+            <button type="button" class="btn btn-small" data-llm-explore hidden>Explore how it works</button>
+            <button type="button" class="btn btn-small" data-llm-reset hidden>Reset</button>
+            <button type="button" class="btn btn-small" data-llm-replay hidden>Replay</button>
+          </div>
+        </div>
+        <p class="llm-viz-disclaimer">A real tiny GPT-style model sorting A/B/C tokens. The model is intentionally small so its internal computation can be explored visually; production LLMs operate at vastly larger scale.</p>
+      </div>
+    </div>
+</section>
 <section class="content-block" data-reveal><h2>Data <span class="amp">&amp;</span> search layer</h2></section>
 <section class="content-block" data-reveal><p>Vector databases and embedding pipelines give our systems semantic access to catalogs, documents and history; hybrid search (vector + keyword + structured filters) keeps retrieval reliable. Data pipelines sync your systems in near-real-time so agents always answer with current state.</p></section>
 <section class="content-block" data-reveal><h2>How it fits together</h2></section>
@@ -149,5 +199,6 @@ Human operators (supervision, approval, takeover)</code></pre></section>
     </footer>
 
   <script src="/js/main.js"></script>
+  <script type="module" src="/js/llm-visualization/index.js"></script>
 </body>
 </html>

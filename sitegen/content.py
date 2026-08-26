@@ -53,6 +53,7 @@ PAGES = [
                  "body": "Autonomous agents that connect to your systems, answer customers and execute workflows with human oversight.",
                  "href": "/solutions/ai-agents/"},
             ]},
+            {"t": "llm-viz", "variant": "home"},
             {"t": "h2", "text": "Our method: from insight to impact"},
             {"t": "grid", "cols": 4, "items": [
                 {"title": "Need Exploration",
@@ -97,19 +98,6 @@ PAGES = [
                 {"title": "All Solutions",
                  "body": "Browse the complete map of what Develo builds.",
                  "href": "/solutions/"},
-            ]},
-            {"t": "h2", "text": "The technology behind Develo"},
-            {"t": "p", "html": (
-                "We engineer on <strong>AWS</strong>, run large language models "
-                "through <strong>Amazon Bedrock</strong>, build "
-                "<strong>autonomous AI agents</strong> with tool access over the "
-                "<strong>Model Context Protocol (MCP)</strong>, and apply "
-                "<strong>RAG and LLM fine-tuning</strong> where it measurably "
-                "improves quality."
-            )},
-            {"t": "links", "items": [
-                {"label": "Our Technology Stack", "href": "/technologies/",
-                 "note": "AWS, Bedrock, AI agents, MCP and LLM fine-tuning"},
             ]},
             {"t": "h2", "text": "Results, not promises"},
             {"t": "p", "html": (
@@ -1020,6 +1008,7 @@ PAGES = [
                 "domain tone, format and task accuracy. Every choice is "
                 "validated with evaluation suites on real business cases."
             )},
+            {"t": "llm-viz", "variant": "tech"},
             {"t": "h2", "text": "Data & search layer"},
             {"t": "p", "html": (
                 "Vector databases and embedding pipelines give our systems "
@@ -1768,6 +1757,7 @@ PAGES = [
                  "body": "Agentes autónomos que se conectan a sus sistemas, responden a clientes y ejecutan flujos con supervisión humana.",
                  "href": "/solutions/ai-agents/"},
             ]},
+            {"t": "llm-viz", "variant": "home"},
             {"t": "h2", "text": "Nuestro método: del conocimiento al impacto"},
             {"t": "grid", "cols": 4, "items": [
                 {"title": "Exploración de la Necesidad",
@@ -1813,19 +1803,6 @@ PAGES = [
                 {"title": "Todas las Soluciones",
                  "body": "Explore el mapa completo de lo que Develo construye.",
                  "href": "/solutions/"},
-            ]},
-            {"t": "h2", "text": "La tecnología detrás de Develo"},
-            {"t": "p", "html": (
-                "Ingenierizamos en <strong>AWS</strong>, ejecutamos modelos de "
-                "lenguaje a través de <strong>Amazon Bedrock</strong>, "
-                "construimos <strong>agentes de IA autónomos</strong> con "
-                "acceso a herramientas vía el <strong>Model Context Protocol "
-                "(MCP)</strong> y aplicamos <strong>RAG y fine-tuning de "
-                "LLMs</strong> donde mejoran mediblemente la calidad."
-            )},
-            {"t": "links", "items": [
-                {"label": "Nuestra Pila Tecnológica", "href": "/technologies/",
-                 "note": "AWS, Bedrock, agentes de IA, MCP y fine-tuning"},
             ]},
             {"t": "h2", "text": "Resultados, no promesas"},
             {"t": "p", "html": (

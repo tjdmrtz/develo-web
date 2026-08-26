@@ -315,6 +315,195 @@ def build_breadcrumbs(page: dict) -> str:
             "<ol>" + "".join(f"<li>{it}</li>" for it in items) + "</ol></nav>")
 
 
+# Copy for the interactive transformer visualization. Kept in sync with
+# features/llm-visualization/runtime/i18n.js, which owns the same strings for
+# the stage labels the client updates at runtime.
+LLM_VIZ = {
+    "en": {
+        "eyebrow": "THE TECHNOLOGY BEHIND DEVELO",
+        "title": "AI systems you can understand, control and put into production.",
+        "body": (
+            "From tokens and attention to agents, retrieval and business actions, "
+            "we engineer the layers that turn modern AI into reliable software."
+        ),
+        "stack": "AWS · Amazon Bedrock · LLMs · RAG · AI Agents · MCP",
+        "cta": "View our technology stack",
+        "cta_href": "/technologies/",
+        "explore": "Explore how it works",
+        "reset": "Reset",
+        "replay": "Replay",
+        "caption": "LIVE TRANSFORMER VISUALIZATION",
+        "dims": "3 layers · 3 attention heads · 48-dimensional embeddings",
+        "disclaimer": (
+            "A real tiny GPT-style model sorting A/B/C tokens. The model is "
+            "intentionally small so its internal computation can be explored "
+            "visually; production LLMs operate at vastly larger scale."
+        ),
+        "unavailable": (
+            "Interactive model visualization is unavailable in this browser. "
+            "The transformer flow is shown in a simplified static view."
+        ),
+        "region": (
+            "Interactive visualization of a small three-layer GPT-style transformer "
+            "processing and sorting A, B and C tokens through embeddings, "
+            "self-attention, transformer layers and next-token probabilities."
+        ),
+        "overview_title": "Model overview",
+        "overview_desc": "A real tiny GPT-style model sorting A/B/C tokens.",
+        "progress": ["Tokens", "Embeddings", "Q/K/V", "Attention",
+                     "Layers", "Output", "Prediction"],
+        "diagram_label": "Simplified transformer flow",
+        "diagram_input": "Input tokens",
+        "diagram_steps": ["Embedding", "Attention × 3 heads", "Transformer × 3"],
+        "diagram_output": "A / B / C probabilities",
+        "explain": [
+            ("Tokens", "Discrete inputs enter the model."),
+            ("Embeddings", "Tokens become learned vectors plus positional information."),
+            ("Self-attention",
+             "Each position weights relevant earlier context through Query, Key and Value."),
+            ("Transformer layers",
+             "Attention and feed-forward transformations repeat through residual paths."),
+            ("Prediction",
+             "The final representation becomes probabilities for the next token."),
+        ],
+    },
+    "es": {
+        "eyebrow": "LA TECNOLOGÍA DETRÁS DE DEVELO",
+        "title": "Sistemas de IA que podés entender, controlar y llevar a producción.",
+        "body": (
+            "Desde tokens y atención hasta agentes, recuperación de conocimiento y "
+            "acciones de negocio, diseñamos las capas que convierten la IA moderna "
+            "en software confiable."
+        ),
+        "stack": "AWS · Amazon Bedrock · LLMs · RAG · Agentes de IA · MCP",
+        "cta": "Ver nuestra tecnología",
+        "cta_href": "/es/technologies/",
+        "explore": "Explorar cómo funciona",
+        "reset": "Restablecer",
+        "replay": "Repetir",
+        "caption": "VISUALIZACIÓN EN VIVO DE UN TRANSFORMER",
+        "dims": "3 capas · 3 cabezas de atención · embeddings de 48 dimensiones",
+        "disclaimer": (
+            "Un pequeño modelo real de estilo GPT ordenando tokens A/B/C. El modelo "
+            "es intencionalmente pequeño para poder explorar visualmente su cómputo "
+            "interno; los LLMs de producción operan a una escala muchísimo mayor."
+        ),
+        "unavailable": (
+            "La visualización interactiva del modelo no está disponible en este "
+            "navegador. El flujo del transformer se muestra en una vista estática "
+            "simplificada."
+        ),
+        "region": (
+            "Visualización interactiva de un pequeño transformer de estilo GPT de "
+            "tres capas que procesa y ordena tokens A, B y C mediante embeddings, "
+            "self-attention, capas transformer y probabilidades del próximo token."
+        ),
+        "overview_title": "Vista general del modelo",
+        "overview_desc": "Un pequeño modelo real de estilo GPT ordenando tokens A/B/C.",
+        "progress": ["Tokens", "Embeddings", "Q/K/V", "Attention",
+                     "Capas", "Output", "Predicción"],
+        "diagram_label": "Flujo simplificado del transformer",
+        "diagram_input": "Tokens de entrada",
+        "diagram_steps": ["Embedding", "Atención × 3 cabezas", "Transformer × 3"],
+        "diagram_output": "Probabilidades A / B / C",
+        "explain": [
+            ("Tokens", "Las entradas discretas ingresan al modelo."),
+            ("Embeddings",
+             "Los tokens se convierten en vectores aprendidos más información posicional."),
+            ("Self-attention",
+             "Cada posición pondera el contexto previo relevante mediante Query, Key y Value."),
+            ("Capas transformer",
+             "Las transformaciones de atención y feed-forward se repiten mediante "
+             "conexiones residuales."),
+            ("Predicción",
+             "La representación final se convierte en probabilidades para el próximo token."),
+        ],
+    },
+}
+
+# The pinned upstream demo input: tokens [2, 1, 0, 1, 1, 2] under 0->A, 1->B, 2->C.
+LLM_VIZ_INPUT_TOKENS = ("C", "B", "A", "B", "B", "C")
+LLM_VIZ_OUTPUT_TOKENS = ("A", "B", "C")
+
+
+def render_llm_viz(page: dict, block: dict) -> str:
+    """Static shell for the client-only WebGL transformer visualization.
+
+    Everything that carries meaning renders as crawlable HTML; the canvas is
+    hydrated only when the section approaches the viewport.
+    """
+    lang = page["lang"]
+    copy = LLM_VIZ[lang]
+    variant = block.get("variant", "home")
+
+    explain = ""
+    if variant == "tech":
+        items = "".join(
+            f"<li><strong>{display_text(title)}</strong> {display_text(body)}</li>"
+            for title, body in copy["explain"]
+        )
+        explain = f'<ul class="llm-tech-explain">{items}</ul>'
+
+    input_cells = "".join(f"<span>{tok}</span>" for tok in LLM_VIZ_INPUT_TOKENS)
+    output_cells = "".join(f"<span>{tok}</span>" for tok in LLM_VIZ_OUTPUT_TOKENS)
+    steps = "".join(f"<li>{display_text(step)}</li>" for step in copy["diagram_steps"])
+    progress = "".join(
+        f"<li data-llm-progress-item>{display_text(label)}</li>"
+        for label in copy["progress"]
+    )
+
+    return f"""
+    <div class="llm-tech" data-llm-viz data-lang="{lang}" data-variant="{variant}">
+      <div class="llm-tech-copy">
+        <p class="llm-tech-eyebrow">{display_text(copy["eyebrow"])}</p>
+        <h2 id="llm-tech-title">{display_text(copy["title"])}</h2>
+        <p>{display_text(copy["body"])}</p>
+        <p class="llm-tech-stack">{display_text(copy["stack"])}</p>
+        {explain}
+        <a class="btn btn-small" href="{copy["cta_href"]}">{display_text(copy["cta"])}</a>
+      </div>
+      <div class="llm-viz-shell">
+        <div class="llm-viz-meta">
+          <p class="llm-viz-caption">{display_text(copy["caption"])}</p>
+          <p class="llm-viz-dims">{display_text(copy["dims"])}</p>
+        </div>
+        <div class="llm-viz-stage" role="region" aria-label="{esc(copy["region"])}">
+          <div class="llm-viz-fallback" data-llm-fallback>
+            <p class="llm-viz-fallback-msg" data-llm-fallback-msg hidden>{display_text(copy["unavailable"])}</p>
+            <ol class="llm-viz-diagram" aria-label="{esc(copy["diagram_label"])}">
+              <li class="llm-viz-diagram-tokens">
+                <span class="llm-viz-diagram-label">{display_text(copy["diagram_input"])}</span>
+                <span class="llm-viz-cells">{input_cells}</span>
+              </li>
+              {steps}
+              <li class="llm-viz-diagram-tokens">
+                <span class="llm-viz-diagram-label">{display_text(copy["diagram_output"])}</span>
+                <span class="llm-viz-cells">{output_cells}</span>
+              </li>
+            </ol>
+          </div>
+          <canvas data-llm-canvas aria-hidden="true"></canvas>
+          <div class="llm-viz-overlay">
+            <p class="llm-viz-stage-title" data-llm-stage-title>{display_text(copy["overview_title"])}</p>
+            <p class="llm-viz-stage-desc" data-llm-stage-desc>{display_text(copy["overview_desc"])}</p>
+            <p class="llm-viz-probs" data-llm-probs></p>
+            <p class="llm-viz-hint" data-llm-hint hidden></p>
+          </div>
+        </div>
+        <div class="llm-viz-controls">
+          <ol class="llm-viz-progress" aria-hidden="true">{progress}</ol>
+          <div class="llm-viz-buttons">
+            <button type="button" class="btn btn-small" data-llm-explore hidden>{display_text(copy["explore"])}</button>
+            <button type="button" class="btn btn-small" data-llm-reset hidden>{display_text(copy["reset"])}</button>
+            <button type="button" class="btn btn-small" data-llm-replay hidden>{display_text(copy["replay"])}</button>
+          </div>
+        </div>
+        <p class="llm-viz-disclaimer">{display_text(copy["disclaimer"])}</p>
+      </div>
+    </div>
+"""
+
+
 def render_block(b: dict, page: dict) -> str:
     t = b["t"]
     lang = page["lang"]
@@ -447,6 +636,8 @@ def render_block(b: dict, page: dict) -> str:
       <button class="btn" type="submit">{labels['submit']} <span aria-hidden="true">⟨›⟩</span></button>
     </form>
 """
+    if t == "llm-viz":
+        return render_llm_viz(page, b)
     if t == "cta":
         meeting = "Agendar reunión" if lang == "es" else "Book a Meeting"
         subject = "Agendar%20una%20reunion%20con%20Develo" if lang == "es" else "Book%20a%20meeting%20with%20Develo"
@@ -532,6 +723,11 @@ def render_page(page: dict) -> str:
     )
     lang = page["lang"]
     home = page["path"] in ("/", "/es/")
+    has_llm_viz = any(b["t"] == "llm-viz" for b in page["sections"])
+    llm_viz_script = (
+        '\n  <script type="module" src="/js/llm-visualization/index.js"></script>'
+        if has_llm_viz else ""
+    )
     spatial_hero = build_spatial_hero() if home else ""
     body_class = "home-page" if home else "inner-page"
     rendered = f"""<!DOCTYPE html>
@@ -562,7 +758,7 @@ def render_page(page: dict) -> str:
     </div>
   </main>
 {build_footer(page)}
-  <script src="/js/main.js"></script>
+  <script src="/js/main.js"></script>{llm_viz_script}
 </body>
 </html>
 """

@@ -86,6 +86,56 @@
 <section class="content-block" data-reveal><p>Combinamos <strong>Retrieval-Augmented Generation (RAG)</strong>, embeddings, bases vectoriales, reranking y fuentes visibles para responder con conocimiento dinámico y verificable.</p></section>
 <section class="content-block" data-reveal><h2>Fine-tuning de LLMs</h2></section>
 <section class="content-block" data-reveal><p>Aplicamos <strong>fine-tuning de LLMs</strong> solo cuando una evaluación demuestra que supera a instrucciones, ejemplos o RAG para el comportamiento requerido.</p></section>
+<section class="content-block" data-reveal>
+    <div class="llm-tech" data-llm-viz data-lang="es" data-variant="tech">
+      <div class="llm-tech-copy">
+        <p class="llm-tech-eyebrow">LA TECNOLOGÍA DETRÁS DE DEVELO</p>
+        <h2 id="llm-tech-title">Sistemas de IA que podés entender, controlar y llevar a producción.</h2>
+        <p>Desde tokens y atención hasta agentes, recuperación de conocimiento y acciones de negocio, diseñamos las capas que convierten la IA moderna en software confiable.</p>
+        <p class="llm-tech-stack">AWS · Amazon Bedrock · LLMs · RAG · Agentes de IA · MCP</p>
+        <ul class="llm-tech-explain"><li><strong>Tokens</strong> Las entradas discretas ingresan al modelo.</li><li><strong>Embeddings</strong> Los tokens se convierten en vectores aprendidos más información posicional.</li><li><strong>Self-attention</strong> Cada posición pondera el contexto previo relevante mediante Query, Key y Value.</li><li><strong>Capas transformer</strong> Las transformaciones de atención y feed-forward se repiten mediante conexiones residuales.</li><li><strong>Predicción</strong> La representación final se convierte en probabilidades para el próximo token.</li></ul>
+        <a class="btn btn-small" href="/es/technologies/">Ver nuestra tecnología</a>
+      </div>
+      <div class="llm-viz-shell">
+        <div class="llm-viz-meta">
+          <p class="llm-viz-caption">VISUALIZACIÓN EN VIVO DE UN TRANSFORMER</p>
+          <p class="llm-viz-dims">3 capas · 3 cabezas de atención · embeddings de 48 dimensiones</p>
+        </div>
+        <div class="llm-viz-stage" role="region" aria-label="Visualización interactiva de un pequeño transformer de estilo GPT de tres capas que procesa y ordena tokens A, B y C mediante embeddings, self-attention, capas transformer y probabilidades del próximo token.">
+          <div class="llm-viz-fallback" data-llm-fallback>
+            <p class="llm-viz-fallback-msg" data-llm-fallback-msg hidden>La visualización interactiva del modelo no está disponible en este navegador. El flujo del transformer se muestra en una vista estática simplificada.</p>
+            <ol class="llm-viz-diagram" aria-label="Flujo simplificado del transformer">
+              <li class="llm-viz-diagram-tokens">
+                <span class="llm-viz-diagram-label">Tokens de entrada</span>
+                <span class="llm-viz-cells"><span>C</span><span>B</span><span>A</span><span>B</span><span>B</span><span>C</span></span>
+              </li>
+              <li>Embedding</li><li>Atención × 3 cabezas</li><li>Transformer × 3</li>
+              <li class="llm-viz-diagram-tokens">
+                <span class="llm-viz-diagram-label">Probabilidades A / B / C</span>
+                <span class="llm-viz-cells"><span>A</span><span>B</span><span>C</span></span>
+              </li>
+            </ol>
+          </div>
+          <canvas data-llm-canvas aria-hidden="true"></canvas>
+          <div class="llm-viz-overlay">
+            <p class="llm-viz-stage-title" data-llm-stage-title>Vista general del modelo</p>
+            <p class="llm-viz-stage-desc" data-llm-stage-desc>Un pequeño modelo real de estilo GPT ordenando tokens A/B/C.</p>
+            <p class="llm-viz-probs" data-llm-probs></p>
+            <p class="llm-viz-hint" data-llm-hint hidden></p>
+          </div>
+        </div>
+        <div class="llm-viz-controls">
+          <ol class="llm-viz-progress" aria-hidden="true"><li data-llm-progress-item>Tokens</li><li data-llm-progress-item>Embeddings</li><li data-llm-progress-item>Q/K/V</li><li data-llm-progress-item>Attention</li><li data-llm-progress-item>Capas</li><li data-llm-progress-item>Output</li><li data-llm-progress-item>Predicción</li></ol>
+          <div class="llm-viz-buttons">
+            <button type="button" class="btn btn-small" data-llm-explore hidden>Explorar cómo funciona</button>
+            <button type="button" class="btn btn-small" data-llm-reset hidden>Restablecer</button>
+            <button type="button" class="btn btn-small" data-llm-replay hidden>Repetir</button>
+          </div>
+        </div>
+        <p class="llm-viz-disclaimer">Un pequeño modelo real de estilo GPT ordenando tokens A/B/C. El modelo es intencionalmente pequeño para poder explorar visualmente su cómputo interno; los LLMs de producción operan a una escala muchísimo mayor.</p>
+      </div>
+    </div>
+</section>
 <section class="content-block" data-reveal><h2>Evaluación y observabilidad</h2></section>
 <section class="content-block" data-reveal><p>Registramos trazas, calidad, seguridad, latencia, costo y uso. Las evaluaciones automáticas y humanas convierten el desempeño de IA en una métrica operable.</p></section>
 <section class="content-block" data-reveal><h2>Dónde aplicamos esta arquitectura</h2></section>
@@ -137,5 +187,6 @@
     </footer>
 
   <script src="/js/main.js"></script>
+  <script type="module" src="/js/llm-visualization/index.js"></script>
 </body>
 </html>

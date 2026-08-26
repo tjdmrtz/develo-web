@@ -1,7 +1,8 @@
 """
 Build orchestrator: renders every page from sitegen/content.py into the
-develo/ folder, plus css/js and the SEO files (robots.txt, sitemap.xml,
-llms.txt). Non-generated files (README.md, fix_indentation.md) are preserved.
+develo/ folder, plus css/js, the LLM visualization runtime and the SEO files
+(robots.txt, sitemap.xml, llms.txt). Non-generated files (README.md,
+fix_indentation.md) are preserved.
 
 Usage:  python3 -m sitegen.build
 """
@@ -19,6 +20,32 @@ SITE_ROOT = REPO_ROOT / "develo"
 # Files under develo/ that the generator does not produce — preserved as-is.
 KEEP = ("README.md", "fix_indentation.md")
 KEEP_DIRS = ("logo_casos_exito",)
+
+# LLM visualization feature: ES modules and the pinned upstream runtime assets.
+LLM_VIZ_ROOT = REPO_ROOT / "features" / "llm-visualization"
+LLM_VIZ_ASSET_DIR = "llm-viz/bycroft-9da9374"
+
+
+def copy_llm_visualization() -> None:
+    """Publish the visualization ES modules and its pinned upstream assets.
+
+    The runtime assets keep the upstream-SHA directory name so they can be
+    cached immutably; changing their contents requires a new directory.
+    """
+    runtime_src = LLM_VIZ_ROOT / "runtime"
+    if runtime_src.exists():
+        runtime_dest = SITE_ROOT / "js" / "llm-visualization"
+        runtime_dest.mkdir(parents=True, exist_ok=True)
+        for module in sorted(runtime_src.glob("*.js")):
+            shutil.copy2(module, runtime_dest / module.name)
+
+    public_src = LLM_VIZ_ROOT / "public"
+    if public_src.exists():
+        for asset in sorted(public_src.rglob("*")):
+            if asset.is_file():
+                destination = SITE_ROOT / LLM_VIZ_ASSET_DIR / asset.relative_to(public_src)
+                destination.parent.mkdir(parents=True, exist_ok=True)
+                shutil.copy2(asset, destination)
 
 
 def build() -> None:
@@ -65,6 +92,8 @@ def build() -> None:
                 destination = SITE_ROOT / "assets" / static_asset.relative_to(static_dir)
                 destination.parent.mkdir(parents=True, exist_ok=True)
                 shutil.copy2(static_asset, destination)
+
+    copy_llm_visualization()
 
     (SITE_ROOT / "robots.txt").write_text(assets.ROBOTS, encoding="utf-8")
     (SITE_ROOT / "sitemap.xml").write_text(assets.sitemap_xml(), encoding="utf-8")

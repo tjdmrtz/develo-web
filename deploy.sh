@@ -60,13 +60,31 @@ if [ ! -d "$WEBSITE_DIR" ]; then
   echo "ERROR: website folder '$WEBSITE_DIR' not found" >&2
   exit 1
 fi
+LLM_VIZ_DIR="llm-viz"
 echo "Syncing $WEBSITE_DIR/ to s3://$BUCKET_NAME ..."
 aws s3 sync "$WEBSITE_DIR" "s3://$BUCKET_NAME" \
   --delete \
   --exclude "README.md" \
   --exclude "fix_indentation.md" \
   --exclude ".DS_Store" \
+  --exclude "${LLM_VIZ_DIR}/*" \
   --cache-control "max-age=300"
+
+# The visualization runtime assets are keyed by the upstream commit SHA, so they
+# are immutable and must never be overwritten in place.
+if [ -d "$WEBSITE_DIR/$LLM_VIZ_DIR" ]; then
+  echo "Syncing immutable $LLM_VIZ_DIR/ assets ..."
+  aws s3 sync "$WEBSITE_DIR/$LLM_VIZ_DIR" "s3://$BUCKET_NAME/$LLM_VIZ_DIR" \
+    --delete \
+    --exclude "*.wasm" \
+    --cache-control "public, max-age=31536000, immutable"
+  # instantiateStreaming requires an explicit application/wasm content type.
+  aws s3 sync "$WEBSITE_DIR/$LLM_VIZ_DIR" "s3://$BUCKET_NAME/$LLM_VIZ_DIR" \
+    --exclude "*" \
+    --include "*.wasm" \
+    --content-type "application/wasm" \
+    --cache-control "public, max-age=31536000, immutable"
+fi
 
 # --- 3. Clean URLs at the CloudFront edge -----------------------------------
 if [ ! -f "$FUNCTION_CODE_FILE" ]; then
