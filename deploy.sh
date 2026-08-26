@@ -92,6 +92,7 @@ if [ ! -f "$FUNCTION_CODE_FILE" ]; then
   exit 1
 fi
 
+FUNCTION_ARN=""
 if aws cloudfront describe-function --name "$FUNCTION_NAME" --stage DEVELOPMENT >/dev/null 2>&1; then
   FUNCTION_ETAG="$(aws cloudfront describe-function --name "$FUNCTION_NAME" \
     --stage DEVELOPMENT --query 'ETag' --output text)"
@@ -100,19 +101,24 @@ if aws cloudfront describe-function --name "$FUNCTION_NAME" --stage DEVELOPMENT 
     --if-match "$FUNCTION_ETAG" \
     --function-config 'Comment=Rewrite clean URLs to directory index files,Runtime=cloudfront-js-2.0' \
     --function-code "fileb://${FUNCTION_CODE_FILE}" >/dev/null
+  FUNCTION_ETAG="$(aws cloudfront describe-function --name "$FUNCTION_NAME" \
+    --stage DEVELOPMENT --query 'ETag' --output text)"
+  aws cloudfront publish-function --name "$FUNCTION_NAME" \
+    --if-match "$FUNCTION_ETAG" >/dev/null
+  FUNCTION_ARN="$(aws cloudfront describe-function --name "$FUNCTION_NAME" \
+    --stage LIVE --query 'FunctionSummary.FunctionMetadata.FunctionARN' --output text)"
 else
-  aws cloudfront create-function \
-    --name "$FUNCTION_NAME" \
-    --function-config 'Comment=Rewrite clean URLs to directory index files,Runtime=cloudfront-js-2.0' \
-    --function-code "fileb://${FUNCTION_CODE_FILE}" >/dev/null
+  # The GitHub Actions role cannot cloudfront:CreateFunction. If the published
+  # function already exists, keep using it instead of failing the deploy.
+  FUNCTION_ARN="$(aws cloudfront describe-function --name "$FUNCTION_NAME" \
+    --stage LIVE --query 'FunctionSummary.FunctionMetadata.FunctionARN' --output text 2>/dev/null || true)"
+  if [ -z "$FUNCTION_ARN" ] || [ "$FUNCTION_ARN" = "None" ]; then
+    echo "CloudFront function $FUNCTION_NAME is not writable from this role; keeping the existing association"
+    FUNCTION_ARN=""
+  else
+    echo "CloudFront function exists in LIVE; skipping create"
+  fi
 fi
-
-FUNCTION_ETAG="$(aws cloudfront describe-function --name "$FUNCTION_NAME" \
-  --stage DEVELOPMENT --query 'ETag' --output text)"
-aws cloudfront publish-function --name "$FUNCTION_NAME" \
-  --if-match "$FUNCTION_ETAG" >/dev/null
-FUNCTION_ARN="$(aws cloudfront describe-function --name "$FUNCTION_NAME" \
-  --stage LIVE --query 'FunctionSummary.FunctionMetadata.FunctionARN' --output text)"
 
 # --- 4. CloudFront distribution ---------------------------------------------
 # The distribution may already exist from a previous (fresh) workspace: first
@@ -132,12 +138,15 @@ if [ -n "$DISTRIBUTION_ID" ]; then
   echo "CloudFront distribution exists: $DISTRIBUTION_ID"
 
   DIST_RESPONSE="$(aws cloudfront get-distribution-config --id "$DISTRIBUTION_ID")"
-  NEEDS_EDGE_CONFIG="$(echo "$DIST_RESPONSE" | jq -r --arg arn "$FUNCTION_ARN" '
-    (([.DistributionConfig.DefaultCacheBehavior.FunctionAssociations.Items[]?
-       | select(.EventType == "viewer-request" and .FunctionARN == $arn)] | length) != 1)
-    or
-    (([.DistributionConfig.CustomErrorResponses.Items[]?
-       | select(.ErrorCode == 403 and .ResponseCode == "404")] | length) != 1)')"
+  NEEDS_EDGE_CONFIG="false"
+  if [ -n "$FUNCTION_ARN" ]; then
+    NEEDS_EDGE_CONFIG="$(echo "$DIST_RESPONSE" | jq -r --arg arn "$FUNCTION_ARN" '
+      (([.DistributionConfig.DefaultCacheBehavior.FunctionAssociations.Items[]?
+         | select(.EventType == "viewer-request" and .FunctionARN == $arn)] | length) != 1)
+      or
+      (([.DistributionConfig.CustomErrorResponses.Items[]?
+         | select(.ErrorCode == 403 and .ResponseCode == "404")] | length) != 1)')"
+  fi
 
   if [ "$NEEDS_EDGE_CONFIG" = "true" ]; then
     DIST_ETAG="$(echo "$DIST_RESPONSE" | jq -r '.ETag')"
