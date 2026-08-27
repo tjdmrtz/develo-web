@@ -295,10 +295,34 @@ def test_original_visual_language_is_preserved():
     assert len(soup.select("[data-reveal]")) >= 8, "sections should reveal on scroll"
 
     css = (SITE_ROOT / "css" / "style.css").read_text(encoding="utf-8").lower()
-    for token in ("#1d2cf3", "#d8400e", "space grotesk", "azeret mono"):
-        assert token in css, f"missing original design token {token}"
+    for token in ("#243ce6", "#100d28", "space grotesk", "azeret mono"):
+        assert token in css, f"missing official brand token {token}"
     assert "--pointer-x" in css and "--pointer-y" in css
     assert "prefers-reduced-motion: reduce" in css
+
+
+def test_official_brand_tokens_drive_normal_ui():
+    """Normal website CSS uses the official palette; WebGL orange may remain."""
+    css = (SITE_ROOT / "css" / "style.css").read_text(encoding="utf-8")
+    assert "--brand-blue: #243CE6" in css
+    assert "--brand-navy: #100D28" in css
+    assert "--brand-black: #000000" in css
+    assert "--brand-white: #FFFFFF" in css
+    assert re.search(r"--blue:\s*var\(--brand-blue\)", css)
+    assert re.search(r"--orange:\s*var\(--brand-blue\)", css)
+    assert re.search(
+        r"\.floating-plane\.orange\s*\{[^}]*fill:\s*#d8400e",
+        css,
+        re.I | re.S,
+    ), "hero illustration orange must stay protected"
+    assert "#1d2cf3" not in css.lower()
+    ui_orange_roles = re.findall(
+        r"(?:color|background|border-color|accent-color):\s*var\(--orange\)",
+        css,
+    )
+    assert ui_orange_roles, "UI accents still resolve through the remapped --orange token"
+    engine = (SITE_ROOT / "js" / "llm-visualization" / "engine.js").read_text(encoding="utf-8")
+    assert "#d8400e" in engine.lower(), "WebGL technical orange must remain"
 
 
 def test_motion_is_progressively_enhanced():
